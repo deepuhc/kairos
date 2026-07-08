@@ -1,0 +1,25 @@
+{
+  "name": "kairos",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "vitest",
+    "test:ci": "vitest run --coverage",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf packages/*/dist node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8"
+  }
+}

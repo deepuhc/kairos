@@ -1,0 +1,26 @@
+{
+  "name": "@kairos/providers",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Kairos LLM provider adapters — Anthropic, OpenAI, Ollama, smart router",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@kairos/core": "workspace:*",
+    "@kairos/security": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}

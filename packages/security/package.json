@@ -1,0 +1,22 @@
+{
+  "name": "@kairos/security",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Kairos security — data classification, PII redaction, audit logging",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}
