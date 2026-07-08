@@ -14,6 +14,7 @@ export type {
   ExecutionEvent,
 } from "./state.js";
 export { Scheduler } from "./scheduler.js";
+export { PipelineExecutor, type ExecutorConfig } from "./executor.js";
 export { executePattern } from "./patterns.js";
 export { validateGate, type GateResult } from "./gates.js";
 export { parseRecipe } from "./recipe-parser.js";

@@ -16,9 +16,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@kairos/providers": "workspace:*",
     "@kairos/security": "workspace:*"
   },
   "devDependencies": {
+    "@kairos/test-utils": "workspace:*",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   }
