@@ -16,10 +16,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@kairos/core": "workspace:*",
-    "@kairos/providers": "workspace:*",
-    "@kairos/security": "workspace:*",
-    "@kairos/runtime": "workspace:*"
+    "@kairos/core": "*",
+    "@kairos/providers": "*",
+    "@kairos/security": "*",
+    "@kairos/runtime": "*"
   },
   "devDependencies": {
     "vitest": "^2.1.8",

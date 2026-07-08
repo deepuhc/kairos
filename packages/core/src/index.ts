@@ -18,3 +18,5 @@ export { PipelineExecutor, type ExecutorConfig } from "./executor.js";
 export { executePattern } from "./patterns.js";
 export { validateGate, type GateResult } from "./gates.js";
 export { parseRecipe } from "./recipe-parser.js";
+export { Coordinator, type TaskAnalysis } from "./coordinator.js";
+export { ProjectManager, type Project, type AgentRecord, type ProjectState } from "./project-manager.js";

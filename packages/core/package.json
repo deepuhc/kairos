@@ -7,6 +7,14 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./coordinator": {
+      "import": "./dist/coordinator.js",
+      "types": "./dist/coordinator.d.ts"
+    },
+    "./project-manager": {
+      "import": "./dist/project-manager.js",
+      "types": "./dist/project-manager.d.ts"
     }
   },
   "files": ["dist"],
@@ -16,11 +24,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@kairos/providers": "workspace:*",
-    "@kairos/security": "workspace:*"
+    "@kairos/providers": "*",
+    "@kairos/security": "*"
   },
   "devDependencies": {
-    "@kairos/test-utils": "workspace:*",
+    "@kairos/test-utils": "*",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   }

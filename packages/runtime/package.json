@@ -7,6 +7,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./adapters": {
+      "import": "./dist/adapters/index.js",
+      "types": "./dist/adapters/index.d.ts"
     }
   },
   "files": ["dist"],
@@ -16,8 +20,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@kairos/core": "workspace:*",
-    "@kairos/security": "workspace:*"
+    "@kairos/core": "*",
+    "@kairos/security": "*"
   },
   "devDependencies": {
     "tsup": "^8.3.5",
