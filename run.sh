@@ -34,6 +34,7 @@ print_help() {
   echo "    ./run.sh --parallel \"task1\" \"task2\" ...  Run multiple agents in parallel"
   echo "    ./run.sh --sequential \"step1\" \"step2\"   Run agents in sequence (output chains)"
   echo "    ./run.sh --review                        Code review of current git diff"
+  echo "    ./run.sh --web                           Launch browser dashboard (localhost:3000)"
   echo "    ./run.sh --help                          Show this help"
   echo ""
   echo "  Options:"
@@ -73,6 +74,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --review)
       MODE="review"
+      shift
+      ;;
+    --web)
+      MODE="web"
       shift
       ;;
     --model)
@@ -297,6 +302,21 @@ $all_reviews" ${MODEL:+--model "$MODEL"} 2>/dev/null)
   rm -rf "$tmpdir"
 }
 
+run_web() {
+  print_header
+  echo -e "  ${BOLD}Launching web dashboard...${NC}"
+  echo ""
+
+  if [[ ! -f "$KAIROS_DIR/packages/web/dist/server.js" ]]; then
+    echo -e "  ${AMBER}Building first (one-time)...${NC}"
+    (cd "$KAIROS_DIR" && npm run build 2>/dev/null)
+  fi
+
+  echo -e "  ${GREEN}✓${NC} Open ${BOLD}http://localhost:3000${NC} in your browser"
+  echo ""
+  node "$KAIROS_DIR/packages/web/dist/server.js"
+}
+
 # Main dispatch
 case "$MODE" in
   single)
@@ -323,5 +343,8 @@ case "$MODE" in
     ;;
   review)
     run_review
+    ;;
+  web)
+    run_web
     ;;
 esac

@@ -100,7 +100,11 @@ export class Coordinator {
     const subtasks = this.extractSubtasks(task);
     const hasDependencies = this.detectDependencies(lower);
     const requiresIteration = this.matchesSignals(lower, ITERATION_SIGNALS);
-    const requiresSpecialization = this.matchesSignals(lower, SPECIALIZATION_SIGNALS);
+    // Specialization only matters when multiple domains are mentioned
+    // "find security issues" = 1 domain = just do it
+    // "check security and performance" = 2 domains = route to specialists
+    const specializationHits = SPECIALIZATION_SIGNALS.filter(s => lower.includes(s));
+    const requiresSpecialization = specializationHits.length >= 2;
     const requiresDecomposition = this.matchesSignals(lower, DECOMPOSITION_SIGNALS);
     const riskLevel = this.assessRisk(lower);
     const needsApproval = riskLevel === "high" || requiresDecomposition;
@@ -193,7 +197,7 @@ export class Coordinator {
     complexity: "simple" | "moderate" | "complex"
   ): Agent[] {
     if (complexity === "simple") {
-      return [{ id: "worker", role: task }];
+      return [{ id: "agent", role: task }];
     }
 
     switch (pattern) {
@@ -312,17 +316,27 @@ export class Coordinator {
    * Splits on conjunctions, list markers, and semantic breaks.
    */
   private extractSubtasks(task: string): string[] {
+    // Try splitting on "then" / "after" for sequential tasks FIRST
+    // (these are clearly ordered and should never be parallelized)
+    const seqSplit = task.split(/\s*(?:,?\s*then\s+|,?\s*after that\s*,?\s*|,?\s*next\s+|,?\s*followed by\s+)/i);
+    if (seqSplit.length >= 2) {
+      return seqSplit.map(s => s.trim()).filter(s => s.length > 0);
+    }
+
     // Try splitting on common list patterns
     const listSplit = task.split(/(?:,\s*(?:and\s+)?|\s+and\s+|\s*;\s*|\n\s*[-•*]\s*|\n\s*\d+[\.)]\s*)/i);
 
     if (listSplit.length >= 2 && listSplit.every(s => s.trim().length > 5)) {
-      return listSplit.map(s => s.trim()).filter(s => s.length > 0);
-    }
+      const parts = listSplit.map(s => s.trim()).filter(s => s.length > 0);
 
-    // Try splitting on "then" / "after" for sequential tasks
-    const seqSplit = task.split(/\s*(?:,?\s*then\s+|,?\s*after that\s*,?\s*|,?\s*next\s+|,?\s*followed by\s+)/i);
-    if (seqSplit.length >= 2) {
-      return seqSplit.map(s => s.trim()).filter(s => s.length > 0);
+      // If any subtask uses pronouns (them, it, those, this) it depends on
+      // a previous subtask — don't split, treat as one task
+      const pronounPattern = /^(fix|update|change|apply|do|handle|resolve)\s+(them|it|those|this|that)\b/i;
+      if (parts.some(p => pronounPattern.test(p))) {
+        return [task]; // Keep as single task — has implicit dependency
+      }
+
+      return parts;
     }
 
     // Try detecting "for X" patterns (check for security, for performance, for style)
@@ -339,7 +353,11 @@ export class Coordinator {
    * Detect if subtasks have ordering dependencies.
    */
   private detectDependencies(lower: string): boolean {
-    return this.matchesSignals(lower, SEQUENTIAL_SIGNALS);
+    // Explicit sequential signals
+    if (this.matchesSignals(lower, SEQUENTIAL_SIGNALS)) return true;
+    // Pronouns referencing earlier work: "and fix them", "and apply it"
+    if (/and\s+(fix|update|apply|resolve|handle|do)\s+(them|it|those|this|that)\b/.test(lower)) return true;
+    return false;
   }
 
   /**
@@ -373,7 +391,10 @@ export class Coordinator {
     ].filter(Boolean).length;
 
     if (signals >= 3 || requiresDecomposition) return "complex";
-    if (signals >= 1 || subtasks.length >= 2) return "moderate";
+    if (subtasks.length >= 3) return "complex";
+    if (subtasks.length >= 2) return "moderate";
+    // Single subtask: only escalate if multiple signals fire
+    if (signals >= 2) return "moderate";
     return "simple";
   }
 

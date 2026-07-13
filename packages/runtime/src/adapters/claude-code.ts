@@ -6,11 +6,92 @@
  * just your existing Claude Code installation.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
+
+/** Detect the user's login shell */
+function getUserShell(): string {
+  // 1. $SHELL env (most reliable — set by OS)
+  if (process.env.SHELL) return process.env.SHELL;
+
+  // 2. Try to read from /etc/passwd on unix
+  try {
+    const passwd = execSync(`getent passwd $(whoami) 2>/dev/null || grep "^$(whoami):" /etc/passwd`, { encoding: "utf-8" });
+    const shell = passwd.trim().split(":").pop();
+    if (shell && shell.startsWith("/")) return shell;
+  } catch { /* skip */ }
+
+  // 3. Platform defaults
+  if (process.platform === "win32") return "cmd.exe";
+  return "/bin/sh";
+}
+
+/** Verify a claude binary actually works (not just exists) */
+function verifyClaudeBinary(path: string): boolean {
+  try {
+    const out = execSync(`"${path}" --version 2>&1`, { encoding: "utf-8", timeout: 5000 }).trim();
+    return out.includes("Claude Code") || out.includes("claude");
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve the full path to the `claude` binary — verified working */
+function resolveClaudePath(): string {
+  const shell = getUserShell();
+  const tried: string[] = [];
+
+  // 1. Known locations (checked AND verified)
+  const candidates = [
+    join(homedir(), ".config/devai/bin/claude"),
+    join(homedir(), ".claude/bin/claude"),
+    "/usr/local/bin/claude",
+    join(homedir(), ".local/bin/claude"),
+    join(homedir(), ".npm/bin/claude"),
+  ];
+
+  for (const c of candidates) {
+    tried.push(c);
+    try {
+      execSync(`test -x "${c}"`, { stdio: "ignore" });
+      if (verifyClaudeBinary(c)) return c;
+    } catch { /* skip */ }
+  }
+
+  // 2. User's login shell
+  try {
+    const result = execSync(`${shell} -lc 'which claude'`, { encoding: "utf-8", timeout: 5000 }).trim();
+    if (result && !tried.includes(result)) {
+      tried.push(result);
+      if (verifyClaudeBinary(result)) return result;
+    }
+  } catch { /* skip */ }
+
+  // 3. Try each common shell (in case $SHELL is wrong)
+  for (const sh of ["/bin/zsh", "/bin/bash", "/bin/sh"]) {
+    try {
+      const result = execSync(`${sh} -lc 'which claude' 2>/dev/null`, { encoding: "utf-8", timeout: 5000 }).trim();
+      if (result && !tried.includes(result)) {
+        tried.push(result);
+        if (verifyClaudeBinary(result)) return result;
+      }
+    } catch { /* skip */ }
+  }
+
+  // 4. Direct which (no login shell)
+  try {
+    const result = execSync("which claude", { encoding: "utf-8", timeout: 5000 }).trim();
+    if (result && !tried.includes(result)) {
+      if (verifyClaudeBinary(result)) return result;
+    }
+  } catch { /* skip */ }
+
+  console.error("[kairos] WARNING: Could not find a working claude binary. Tried:", tried);
+  return "claude"; // last resort — will likely fail
+}
 
 export interface ClaudeCodeConfig {
   /** Working directory for the claude process */
@@ -45,10 +126,33 @@ export interface ClaudeCodeAgent {
 export class ClaudeCodeRuntime extends EventEmitter {
   private agents = new Map<string, ClaudeCodeAgent>();
   private outputDir: string;
+  readonly claudePath: string;
+  private userShell: string;
 
   constructor(config?: { outputDir?: string }) {
     super();
     this.outputDir = config?.outputDir ?? join(tmpdir(), "kairos-agents");
+    this.userShell = getUserShell();
+    this.claudePath = resolveClaudePath();
+  }
+
+  /**
+   * Spawn claude directly using the resolved binary path.
+   * No login shell needed — we already resolved the full path.
+   * This preserves the parent process's env vars (auth tokens, etc.)
+   * without risk of shell profiles overriding or dropping them.
+   */
+  private spawnClaude(args: string[], cwd: string, interactive: boolean): ChildProcess {
+    // For non-interactive (print mode): use "ignore" for stdin so claude
+    // doesn't wait for piped input that will never come.
+    // For interactive mode: keep stdin as pipe so we can write to it.
+    const stdinMode = interactive ? "pipe" : "ignore";
+
+    return spawn(this.claudePath, args, {
+      cwd,
+      env: { ...process.env },
+      stdio: [stdinMode, "pipe", "pipe"],
+    });
   }
 
   /**
@@ -74,11 +178,14 @@ export class ClaudeCodeRuntime extends EventEmitter {
     const args = this.buildArgs(prompt, config, "print");
 
     return new Promise((resolve, reject) => {
-      const proc = spawn("claude", args, {
-        cwd: config?.workDir ?? process.cwd(),
-        env: { ...process.env },
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      const cwd = config?.workDir ?? process.cwd();
+
+      // Diagnostic logging
+      const logPrefix = `[kairos:${id}]`;
+      console.log(`${logPrefix} Claude: ${this.claudePath} | Args: ${args.length}`);
+      console.log(`${logPrefix} CWD: ${cwd}`);
+
+      const proc = this.spawnClaude(args, cwd, false);
 
       agent.process = proc;
 
@@ -89,13 +196,23 @@ export class ClaudeCodeRuntime extends EventEmitter {
       });
 
       proc.stderr?.on("data", (data: Buffer) => {
+        const chunk = data.toString();
+        console.log(`${logPrefix} STDERR: ${chunk.trim()}`);
         // Claude Code outputs progress/status to stderr
-        this.emit("agent:stderr", { id, chunk: data.toString() });
+        this.emit("agent:stderr", { id, chunk });
+        // Surface errors so dashboard can show them
+        if (chunk.toLowerCase().includes("error") || chunk.toLowerCase().includes("not found") || chunk.toLowerCase().includes("not logged")) {
+          this.emit("agent:output", { id, chunk: `[stderr] ${chunk.trim()}` });
+        }
       });
 
       proc.on("close", (code) => {
         agent.status = code === 0 ? "completed" : "failed";
         agent.process = null;
+        console.log(`${logPrefix} Exit code: ${code}`);
+        if (code !== 0) {
+          console.log(`${logPrefix} STDOUT was: ${agent.output.slice(0, 500)}`);
+        }
         this.emit("agent:done", { id, status: agent.status, output: agent.output });
 
         if (code === 0) {
@@ -170,12 +287,8 @@ export class ClaudeCodeRuntime extends EventEmitter {
     config?: ClaudeCodeConfig
   ): ClaudeCodeAgent {
     const args = this.buildArgs(initialPrompt, config, "interactive");
-
-    const proc = spawn("claude", args, {
-      cwd: config?.workDir ?? process.cwd(),
-      env: { ...process.env },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const cwd = config?.workDir ?? process.cwd();
+    const proc = this.spawnClaude(args, cwd, true);
 
     const agent: ClaudeCodeAgent = {
       id,
