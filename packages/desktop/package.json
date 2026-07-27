@@ -1,0 +1,29 @@
+{
+  "name": "@kairos/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:proxy": "npx tsx scripts/acp-dev-proxy.ts",
+    "dev:full": "npx tsx scripts/acp-dev-proxy.ts & vite; kill %1 2>/dev/null",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lit": "^3.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}
