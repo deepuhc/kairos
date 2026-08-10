@@ -118,6 +118,17 @@ export interface CompletionOptions {
   systemPrompt?: string;
   /** Force JSON output if model supports it */
   jsonMode?: boolean;
+  /**
+   * Enable extended/adaptive reasoning. Modern Claude models (4.6+) use
+   * adaptive thinking — the model decides how much to reason. Legacy
+   * `budget_tokens` is not used. Ignored by providers that don't support it.
+   */
+  thinking?: boolean;
+  /**
+   * Reasoning depth for models that expose it (Claude 4.6+ via
+   * `output_config.effort`). Independent of `thinking`.
+   */
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /** Abort signal for cancellation */
   signal?: AbortSignal;
 }

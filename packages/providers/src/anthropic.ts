@@ -1,9 +1,12 @@
 import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult, StreamChunk, CostEstimate, ModelCapability, ContentPart } from './types.js';
 
+const DEFAULT_MODEL = 'claude-opus-4-8';
+
 const MODELS: ModelInfo[] = [
-  { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', provider: 'anthropic', isLocal: false, contextWindow: 200000, maxOutputTokens: 16384, costPerMillionInput: 3, costPerMillionOutput: 15, capabilities: ['chat', 'code', 'reasoning', 'tool_calling', 'vision', 'streaming', 'json_mode'] },
-  { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', provider: 'anthropic', isLocal: false, contextWindow: 200000, maxOutputTokens: 32768, costPerMillionInput: 15, costPerMillionOutput: 75, capabilities: ['chat', 'code', 'reasoning', 'tool_calling', 'vision', 'streaming', 'json_mode'] },
-  { id: 'claude-haiku-4-20250514', name: 'Claude Haiku 4', provider: 'anthropic', isLocal: false, contextWindow: 200000, maxOutputTokens: 8192, costPerMillionInput: 0.8, costPerMillionOutput: 4, capabilities: ['chat', 'code', 'tool_calling', 'vision', 'streaming'] },
+  { id: 'claude-opus-4-8', name: 'Claude Opus 4.8', provider: 'anthropic', isLocal: false, contextWindow: 1000000, maxOutputTokens: 32768, costPerMillionInput: 5, costPerMillionOutput: 25, capabilities: ['chat', 'code', 'reasoning', 'tool_calling', 'vision', 'streaming', 'json_mode', 'long_context'] },
+  { id: 'claude-opus-4-7', name: 'Claude Opus 4.7', provider: 'anthropic', isLocal: false, contextWindow: 1000000, maxOutputTokens: 32768, costPerMillionInput: 5, costPerMillionOutput: 25, capabilities: ['chat', 'code', 'reasoning', 'tool_calling', 'vision', 'streaming', 'json_mode', 'long_context'] },
+  { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', provider: 'anthropic', isLocal: false, contextWindow: 1000000, maxOutputTokens: 32768, costPerMillionInput: 3, costPerMillionOutput: 15, capabilities: ['chat', 'code', 'reasoning', 'tool_calling', 'vision', 'streaming', 'json_mode', 'long_context'] },
+  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'anthropic', isLocal: false, contextWindow: 200000, maxOutputTokens: 8192, costPerMillionInput: 1, costPerMillionOutput: 5, capabilities: ['chat', 'code', 'tool_calling', 'vision', 'streaming'] },
 ];
 
 export class AnthropicProvider implements Provider {
@@ -31,8 +34,21 @@ export class AnthropicProvider implements Provider {
     return model?.capabilities.includes(capability) ?? false;
   }
 
+  // Modern Claude models (4.6+) use adaptive thinking: the model decides how
+  // much to reason, and depth is tuned via output_config.effort. The legacy
+  // `thinking: {type: "enabled", budget_tokens}` shape is rejected with a 400
+  // on Opus 4.8/4.7, Sonnet 5, and Fable 5 — never send it.
+  private applyReasoning(body: Record<string, unknown>, options?: CompletionOptions): void {
+    if (options?.thinking) {
+      body.thinking = { type: 'adaptive' };
+    }
+    if (options?.effort) {
+      body.output_config = { effort: options.effort };
+    }
+  }
+
   estimateCost(messages: Message[], model?: string): CostEstimate {
-    const modelInfo = MODELS.find((m) => m.id === (model || 'claude-sonnet-4-20250514'));
+    const modelInfo = MODELS.find((m) => m.id === (model || DEFAULT_MODEL));
     if (!modelInfo) return { inputCostUsd: 0, outputCostUsd: 0, totalCostUsd: 0 };
 
     const inputChars = messages.reduce((sum, m) => {
@@ -49,7 +65,7 @@ export class AnthropicProvider implements Provider {
   }
 
   async complete(messages: Message[], options?: CompletionOptions): Promise<CompletionResult> {
-    const model = options?.model || 'claude-sonnet-4-20250514';
+    const model = options?.model || DEFAULT_MODEL;
     const formattedMessages = messages.filter((m) => m.role !== 'system').map((m) => ({
       role: m.role,
       content: this.formatContent(m.content),
@@ -65,6 +81,7 @@ export class AnthropicProvider implements Provider {
       body.system = options?.systemPrompt || (typeof systemMsg?.content === 'string' ? systemMsg.content : '');
     }
     if (options?.temperature !== undefined) body.temperature = options.temperature;
+    this.applyReasoning(body, options);
 
     const res = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
@@ -112,7 +129,7 @@ export class AnthropicProvider implements Provider {
   }
 
   async *streamChunks(messages: Message[], options?: CompletionOptions): AsyncIterable<StreamChunk> {
-    const model = options?.model || 'claude-sonnet-4-20250514';
+    const model = options?.model || DEFAULT_MODEL;
     const formattedMessages = messages.filter((m) => m.role !== 'system').map((m) => ({
       role: m.role,
       content: this.formatContent(m.content),
@@ -128,6 +145,8 @@ export class AnthropicProvider implements Provider {
     if (systemMsg || options?.systemPrompt) {
       body.system = options?.systemPrompt || (typeof systemMsg?.content === 'string' ? systemMsg.content : '');
     }
+    if (options?.temperature !== undefined) body.temperature = options.temperature;
+    this.applyReasoning(body, options);
 
     const res = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',

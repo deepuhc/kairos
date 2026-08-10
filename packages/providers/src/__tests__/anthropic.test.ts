@@ -54,9 +54,9 @@ describe('AnthropicProvider', () => {
 
   describe('hasCapability', () => {
     it('correctly reports capabilities', () => {
-      expect(provider.hasCapability!('claude-opus-4-20250514', 'reasoning')).toBe(true);
-      expect(provider.hasCapability!('claude-opus-4-20250514', 'vision')).toBe(true);
-      expect(provider.hasCapability!('claude-haiku-4-20250514', 'reasoning')).toBe(false);
+      expect(provider.hasCapability!('claude-opus-4-8', 'reasoning')).toBe(true);
+      expect(provider.hasCapability!('claude-opus-4-8', 'vision')).toBe(true);
+      expect(provider.hasCapability!('claude-haiku-4-5', 'reasoning')).toBe(false);
     });
 
     it('returns false for unknown model', () => {
@@ -67,7 +67,7 @@ describe('AnthropicProvider', () => {
   describe('estimateCost', () => {
     it('estimates cost for messages', () => {
       const messages = [{ role: 'user' as const, content: 'Hello world, how are you?' }];
-      const cost = provider.estimateCost!(messages, 'claude-sonnet-4-20250514');
+      const cost = provider.estimateCost!(messages, 'claude-sonnet-5');
       expect(cost.inputCostUsd).toBeGreaterThan(0);
       expect(cost.outputCostUsd).toBeGreaterThan(0);
       expect(cost.totalCostUsd).toBe(cost.inputCostUsd + cost.outputCostUsd);
@@ -83,7 +83,7 @@ describe('AnthropicProvider', () => {
           ],
         },
       ];
-      const cost = provider.estimateCost!(messages, 'claude-sonnet-4-20250514');
+      const cost = provider.estimateCost!(messages, 'claude-sonnet-5');
       expect(cost.totalCostUsd).toBeGreaterThan(0);
     });
 
@@ -99,7 +99,7 @@ describe('AnthropicProvider', () => {
         ok: true,
         json: async () => ({
           content: [{ type: 'text', text: 'Hello!' }],
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           usage: { input_tokens: 10, output_tokens: 5 },
           stop_reason: 'end_turn',
         }),
@@ -133,7 +133,7 @@ describe('AnthropicProvider', () => {
         ok: true,
         json: async () => ({
           content: [{ type: 'text', text: 'A cat' }],
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-5',
           usage: { input_tokens: 100, output_tokens: 5 },
           stop_reason: 'end_turn',
         }),
@@ -164,7 +164,7 @@ describe('AnthropicProvider', () => {
             { type: 'thinking', text: 'Let me think...' },
             { type: 'text', text: 'The answer is 42' },
           ],
-          model: 'claude-opus-4-20250514',
+          model: 'claude-opus-4-8',
           usage: { input_tokens: 10, output_tokens: 20 },
           stop_reason: 'end_turn',
         }),

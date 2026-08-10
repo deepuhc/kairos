@@ -125,7 +125,7 @@ describe('types', () => {
     it('includes thinking field', () => {
       const result: CompletionResult = {
         content: 'The answer is 42',
-        model: 'claude-opus-4-20250514',
+        model: 'claude-opus-4-8',
         usage: { inputTokens: 100, outputTokens: 50, totalCostUsd: 0.01 },
         finishReason: 'stop',
         thinking: 'Let me reason about this...',

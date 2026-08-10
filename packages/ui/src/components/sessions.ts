@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import { customElement, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import {
-  getSessions, exportSessionUrl, renameSession, pinSession, unpinSession, deleteSession, deleteSessions, revealInFolder,
+  getSessions, getAgents, exportSessionUrl, renameSession, pinSession, unpinSession, deleteSession, deleteSessions, revealInFolder,
   type SessionEntry,
 } from '../services/api.js';
 import { filterSessions, orderSessionsForHistory } from '../services/session-search.js';
@@ -22,8 +22,11 @@ import { tooltip, overflowTooltip } from '../directives/tooltip.js';
 import { renderDeleteButton, confirmDeleteStyles } from './confirm-delete.js';
 import './session-preview.js';
 
-const TOOLS = ['all', 'claude', 'codex', 'gemini'] as const;
-type ToolFilter = typeof TOOLS[number];
+// The tool filter is always-available 'all' plus a data-driven set of agent
+// ids: those the user has actually used (present in session history) unioned
+// with those currently installed. A hardcoded roster would list agents the
+// user has neither run nor installed, so we derive it at runtime instead.
+type ToolFilter = string;
 
 const SINCE_OPTIONS = ['1d', '7d', '30d', '90d'] as const;
 type Since = typeof SINCE_OPTIONS[number];
@@ -57,6 +60,9 @@ export class DevaiSessions extends LitElement {
   @state() private loading = true;
   @state() private filter = '';
   @state() private toolFilter: ToolFilter = 'all';
+  // Agent ids to offer as filter pills, beyond the always-present 'all'. Union
+  // of used (seen in history) and installed agents; populated once on connect.
+  @state() private toolOptions: string[] = [];
   @state() private since: Since = '7d';
   @state() private activeOnly = false;
   @state() private cwdOnly = false;
@@ -498,6 +504,28 @@ export class DevaiSessions extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.load();
+    this.loadToolOptions();
+  }
+
+  // Build the tool-filter pill set from real data: agents seen in session
+  // history (used) unioned with installed agents. Both fetches are best-effort
+  // — a failure just leaves the 'all' pill on its own rather than blocking the
+  // list. Sessions are fetched unfiltered by tool (a wide `since`) so the "used"
+  // set reflects every agent, not just those matching the active pill.
+  private async loadToolOptions() {
+    const used = new Set<string>();
+    const installed = new Set<string>();
+    const [sessionsRes, agentsRes] = await Promise.allSettled([
+      getSessions({ all: true, since: '90d' }),
+      getAgents(),
+    ]);
+    if (sessionsRes.status === 'fulfilled') {
+      for (const s of sessionsRes.value.sessions) if (s.tool) used.add(s.tool);
+    }
+    if (agentsRes.status === 'fulfilled') {
+      for (const a of agentsRes.value.agents) if (a.installed) installed.add(a.id);
+    }
+    this.toolOptions = [...new Set([...used, ...installed])].sort();
   }
 
   private async load() {
@@ -841,7 +869,7 @@ export class DevaiSessions extends LitElement {
           Search with ${this.agentDisplayName()}
         </button>
         <div class="pill-group">
-          ${TOOLS.map((t) => html`
+          ${['all', ...this.toolOptions].map((t) => html`
             <button
               class="pill-btn ${this.toolFilter === t ? 'active' : ''}"
               @click=${async () => { this.toolFilter = t; await this.load(); }}
