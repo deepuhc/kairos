@@ -6,12 +6,14 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npm run build --workspaces",
-    "start": "node packages/web/dist/server.js",
-    "dashboard": "node packages/web/dist/server.js",
+    "build": "npm run build --workspaces --if-present",
+    "start": "node packages/server/dist/main.js",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:ui\"",
+    "dev:server": "npm run dev -w packages/server",
+    "dev:ui": "npm run dev -w packages/ui",
     "test": "vitest",
     "test:ci": "vitest run --coverage",
     "typecheck": "tsc -b",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",

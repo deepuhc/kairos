@@ -1,82 +1,157 @@
-/**
- * Provider interface — the contract all LLM adapters implement.
- */
+// --- Multi-modal message content ---
 
-export interface ProviderMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
+export interface TextContent {
+  type: 'text';
+  text: string;
 }
 
-export interface ProviderOptions {
-  model: string;
-  temperature?: number;
-  maxTokens?: number;
-  tools?: ToolDefinition[];
-  stream?: boolean;
+export interface ImageContent {
+  type: 'image';
+  /** Base64-encoded image data */
+  data: string;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 }
 
-export interface ToolDefinition {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
+export interface FileContent {
+  type: 'file';
+  /** Base64-encoded file data */
+  data: string;
+  mimeType: string;
+  filename?: string;
 }
 
-export interface ProviderResponse {
-  content: string;
-  model: string;
-  tokensUsed: { input: number; output: number; total: number };
-  costUsd: number;
-  durationMs: number;
-  toolCalls?: ToolCall[];
+export type ContentPart = TextContent | ImageContent | FileContent;
+
+export interface Message {
+  role: 'system' | 'user' | 'assistant';
+  content: string | ContentPart[];
 }
 
-export interface ToolCall {
+// --- Stream chunk protocol ---
+
+export interface TextChunk {
+  type: 'text';
+  text: string;
+}
+
+export interface ThinkingChunk {
+  type: 'thinking';
+  text: string;
+}
+
+export interface ToolCallChunk {
+  type: 'tool_call';
   id: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments: string;
 }
+
+export interface ToolResultChunk {
+  type: 'tool_result';
+  id: string;
+  content: string;
+  isError?: boolean;
+}
+
+export interface CitationChunk {
+  type: 'citation';
+  source: string;
+  text: string;
+}
+
+export interface UsageChunk {
+  type: 'usage';
+  inputTokens: number;
+  outputTokens: number;
+  totalCostUsd?: number;
+}
+
+export interface ErrorChunk {
+  type: 'error';
+  message: string;
+  code?: string;
+}
+
+export type StreamChunk =
+  | TextChunk
+  | ThinkingChunk
+  | ToolCallChunk
+  | ToolResultChunk
+  | CitationChunk
+  | UsageChunk
+  | ErrorChunk;
+
+// --- Model capabilities ---
+
+export type ModelCapability =
+  | 'chat'
+  | 'code'
+  | 'reasoning'
+  | 'tool_calling'
+  | 'vision'
+  | 'long_context'
+  | 'streaming'
+  | 'json_mode'
+  | 'function_calling';
 
 export interface ModelInfo {
   id: string;
-  provider: string;
   name: string;
-  contextWindow: number;
-  costPerInputToken: number;
-  costPerOutputToken: number;
-  capabilities: ModelCapability[];
+  provider: string;
   isLocal: boolean;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  costPerMillionInput?: number;
+  costPerMillionOutput?: number;
+  capabilities: ModelCapability[];
+  supportsVision?: boolean;
+  supportsStreaming?: boolean;
 }
 
-export type ModelCapability =
-  | "reasoning"
-  | "coding"
-  | "vision"
-  | "tools"
-  | "fast"
-  | "cheap";
+// --- Completion options ---
 
-/**
- * All providers implement this interface.
- */
+export interface CompletionOptions {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  stream?: boolean;
+  systemPrompt?: string;
+  /** Force JSON output if model supports it */
+  jsonMode?: boolean;
+  /** Abort signal for cancellation */
+  signal?: AbortSignal;
+}
+
+export interface CompletionResult {
+  content: string;
+  model: string;
+  usage?: { inputTokens: number; outputTokens: number; totalCostUsd?: number };
+  finishReason?: 'stop' | 'length' | 'tool_use' | 'error';
+  thinking?: string;
+}
+
+// --- Cost estimation ---
+
+export interface CostEstimate {
+  inputCostUsd: number;
+  outputCostUsd: number;
+  totalCostUsd: number;
+}
+
+// --- Provider interface ---
+
 export interface Provider {
   readonly name: string;
   readonly isLocal: boolean;
-
-  /** Check if the provider is available and configured */
   isAvailable(): Promise<boolean>;
-
-  /** List available models */
   listModels(): Promise<ModelInfo[]>;
-
-  /** Send a completion request */
-  complete(
-    messages: ProviderMessage[],
-    options: ProviderOptions
-  ): Promise<ProviderResponse>;
-
-  /** Send a streaming completion request */
-  stream?(
-    messages: ProviderMessage[],
-    options: ProviderOptions
-  ): AsyncIterable<string>;
+  complete(messages: Message[], options?: CompletionOptions): Promise<CompletionResult>;
+  /** Legacy string-only stream (backward compat) */
+  stream(messages: Message[], options?: CompletionOptions): AsyncIterable<string>;
+  /** Typed stream chunks with thinking, tool calls, citations */
+  streamChunks?(messages: Message[], options?: CompletionOptions): AsyncIterable<StreamChunk>;
+  /** Estimate cost for a given message set before sending */
+  estimateCost?(messages: Message[], model?: string): CostEstimate;
+  /** Check if a model supports a specific capability */
+  hasCapability?(modelId: string, capability: ModelCapability): boolean;
 }

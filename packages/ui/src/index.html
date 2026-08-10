@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preload" as="font" href="/fonts/InterVariable.woff2" type="font/woff2" crossorigin />
+  <title>Kairos</title>
+  <script>
+    (function () {
+      try {
+        var get = function (key) {
+          return localStorage.getItem('kairos-' + key);
+        };
+        var m = get('theme') || 'light';
+        var light = m === 'light' || (m === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches);
+        var kind = light ? 'light' : 'dark';
+        var id = get(light ? 'theme-light' : 'theme-dark')
+          || (light ? 'kairos-light' : 'kairos-dark');
+        var root = document.documentElement;
+        root.setAttribute('data-theme', id);
+        root.setAttribute('data-theme-kind', kind);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles/theme.css" />
+</head>
+<body>
+  <kairos-app></kairos-app>
+  <script type="module" src="./app.ts"></script>
+</body>
+</html>

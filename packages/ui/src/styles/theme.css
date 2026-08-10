@@ -1,0 +1,684 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Self-hosted variable fonts (no npm dependency — woff2 dropped in public/).
+   Missing files degrade gracefully to the system stack in --font/--font-mono.
+   ────────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'InterVariable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'GeistMono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
+}
+
+:root {
+  /* ── Typography ── */
+  --font: 'InterVariable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'GeistMono', 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 26px;
+
+  /* ── Base Palette ──
+     Aqua-inspired: macOS/iOS vibrancy with frosted translucency, soft blue
+     accent, and light-on-light layering. Cool, crisp, premium. */
+  --accent: #007aff;
+  --accent-rgb: 0, 122, 255;
+  --blue: #5ac8fa;
+  --indigo: #5856d6;
+  --purple: #34aadc;
+  --purple-light: #5ac8fa;
+  --pink: #ff2d55;
+  --green: #34c759;
+  --emerald: #30d158;
+  --teal: #5ac8fa;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --amber: #ffcc00;
+  --yellow: #ffcc00;
+
+  /* ── Neutrals (cool light canvas — macOS style) ── */
+  --bright-white: #1d1d1f;   /* strongest text (dark on light) */
+  --white: #3a3a3c;          /* primary text */
+  --gray: #6e6e73;           /* muted text */
+  --neutral-gray: #8e8e93;   /* subtle text / placeholders */
+  --blue-gray: #f5f5f7;      /* page base — Apple's signature off-white */
+  --blue-gray-light: #ffffff;
+  --blue-gray-lighter: #e8e8ed;
+
+  /* ── Elevation scale (frosted glass surfaces) ── */
+  --bg-base: #f5f5f7;
+  --bg-subtle: #fafafa;
+  --bg-elevated: rgba(255, 255, 255, 0.72);
+  --bg-elevated-hover: rgba(255, 255, 255, 0.85);
+  --bg-overlay: rgba(255, 255, 255, 0.80);
+
+  /* ── Borders (subtle, macOS-style separator) ── */
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.16);
+
+  /* ── Black Alpha Scale (washes on light canvas) ── */
+  --w3: rgba(0, 0, 0, 0.02);
+  --w4: rgba(0, 0, 0, 0.03);
+  --w5: rgba(0, 0, 0, 0.04);
+  --w6: rgba(0, 0, 0, 0.05);
+  --w8: rgba(0, 0, 0, 0.06);
+  --w10: rgba(0, 0, 0, 0.08);
+  --w12: rgba(0, 0, 0, 0.10);
+  --w15: rgba(0, 0, 0, 0.12);
+  --w18: rgba(0, 0, 0, 0.15);
+  --w25: rgba(0, 0, 0, 0.20);
+  --w40: rgba(0, 0, 0, 0.32);
+  --w50: rgba(0, 0, 0, 0.42);
+  --w65: rgba(0, 0, 0, 0.55);
+  --w80: rgba(0, 0, 0, 0.72);
+
+  /* ── Accent Alpha Scale (derived from --accent-rgb) ── */
+  --accent-a10: rgba(var(--accent-rgb), 0.10);
+  --accent-a15: rgba(var(--accent-rgb), 0.16);
+  --accent-a18: rgba(var(--accent-rgb), 0.18);
+  --accent-a25: rgba(var(--accent-rgb), 0.24);
+  --accent-a35: rgba(var(--accent-rgb), 0.34);
+  --accent-a50: rgba(var(--accent-rgb), 0.50);
+
+  /* ── Status Alpha Scales (desaturated semantic hues) ── */
+  --red-a15: rgba(248, 81, 73, 0.14);
+  --red-a25: rgba(248, 81, 73, 0.24);
+  --green-a10: rgba(63, 185, 80, 0.10);
+  --green-a12: rgba(63, 185, 80, 0.12);
+  --green-a15: rgba(63, 185, 80, 0.15);
+  --green-a30: rgba(63, 185, 80, 0.28);
+  --amber-a15: rgba(210, 153, 34, 0.15);
+  --amber-a25: rgba(210, 153, 34, 0.24);
+  --teal-a14: rgba(57, 197, 207, 0.14);
+
+  /* ── Shadows (soft, diffused — macOS style) ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.14);
+  --shadow-glass: 0 2px 20px rgba(0, 0, 0, 0.08);
+
+  /* ── "Glass" tokens — actual frosted translucency ── */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-hover: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-hover: rgba(0, 0, 0, 0.14);
+  --glass-blur: 20px;
+  --glass-shadow: var(--shadow-glass);
+  --widget-shadow: var(--shadow-sm);
+  --widget-shadow-hover: var(--shadow-md);
+  --overlay-blur: 24px;
+
+  /* ── Surfaces (frosted, translucent) ── */
+  --surface-modal: rgba(255, 255, 255, 0.90);
+  --surface-tooltip: rgba(30, 30, 30, 0.92);
+  --surface-raised: rgba(255, 255, 255, 0.80);
+  /* Page background, used where an element must blend into it (e.g. an avatar
+     ring) — kept as a token so it tracks the active theme. */
+  --bg: var(--blue-gray);
+
+  /* ── Fixed-contrast helpers ── */
+  --on-accent: #ffffff;
+  /* Syntax-highlight string color when a JSON token is highlighted. */
+  --code-string-hl: #b8f5d0;
+  /* Gemini agent badge — neutral-blue tint. */
+  --gemini-fg: #7eb0ff;
+  --gemini-bg: rgba(126, 176, 255, 0.12);
+  --gemini-border: rgba(126, 176, 255, 0.28);
+
+  /* ── Transitions (snappier) ── */
+  --transition-fast: 0.12s cubic-bezier(0.2, 0, 0, 1);
+  --transition-base: 0.18s cubic-bezier(0.2, 0, 0, 1);
+  --transition-slow: 0.30s cubic-bezier(0.2, 0, 0, 1);
+
+  /* ── Semantic Aliases (backward compat) ── */
+  --color-bg: var(--blue-gray);
+  --color-surface: var(--glass-bg);
+  --color-surface-hover: var(--glass-bg-hover);
+  --color-border: var(--glass-border);
+  --color-text: var(--white);
+  --color-text-muted: var(--gray);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--purple);
+  --color-success: var(--green);
+  --color-warning: var(--amber);
+  --color-danger: var(--red);
+
+  /* ── Radii (rounded, modern) ── */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+
+  /* ── Spacing scale ──
+     Adopt incrementally; hardcoded px literals elsewhere are being migrated. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 36px;
+
+  /* Canonical width for the left rails in the settings-hub sub-views. */
+  --rail-width: 220px;
+
+  /* ── Focus ring ──
+     A single thin accent outline; `outline` follows border-radius and never
+     reflows. Components spread `focusRing` (src/styles/focus.ts) into their
+     styles since a bare global selector can't pierce Lit shadow roots. */
+  --focus-ring: 2px solid var(--accent);
+  --focus-ring-offset: 2px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Light KIND — structural flips shared by every light theme
+   The whole app is token-driven, so "going light" is almost entirely a matter
+   of re-pointing structural tokens: the alpha washes flip white→black, shadows
+   soften, glass becomes solid white. Custom properties cascade into Lit shadow
+   roots, so these overrides reach every component without touching component CSS.
+
+   `data-theme-kind='light'` is set on <html> by the theme service alongside the
+   per-theme `data-theme='<id>'`. This block carries only what's common to all
+   light themes; the individual palette (canvas, accent, text) lives in the
+   per-theme blocks below. Dark is the baseline :root above, so there's no
+   matching `data-theme-kind='dark'` block — a dark theme only overrides palette.
+
+   The neutrals/elevation/accent set here ARE the built-in "devai Light" theme
+   (default blue accent), so `devai-light` needs no palette block of its own.
+   ────────────────────────────────────────────────────────────────────────── */
+:root[data-theme-kind='light'] {
+  /* ── Neutrals: light canvas ramp ── */
+  --bright-white: #18181b;   /* strongest text */
+  --white: #27272a;          /* primary text */
+  --gray: #52525b;           /* muted text — AA on white */
+  --neutral-gray: #71717a;   /* subtle text */
+  --blue-gray: #fbfbfb;      /* page background */
+  --blue-gray-light: #f4f4f5;
+  --blue-gray-lighter: #e4e4e7;
+
+  /* ── Elevation (light) ── */
+  --bg-base: #fbfbfb;
+  --bg-subtle: #f4f4f5;
+  --bg-elevated: #ffffff;
+  --bg-elevated-hover: #f7f7f8;
+  --bg-overlay: #ffffff;
+
+  /* ── Borders ── */
+  --border-subtle: rgba(9, 9, 11, 0.06);
+  --border: rgba(9, 9, 11, 0.10);
+  --border-strong: rgba(9, 9, 11, 0.16);
+
+  /* ── Accent text legible on white ── */
+  --purple-light: #2563eb;
+
+  /* ── White-alpha scale → black-alpha ── */
+  /* These tokens are only ever used for surfaces, borders, and hover washes —
+     never as text color — so flipping them to dark-on-light is safe. */
+  --w3: rgba(9, 9, 11, 0.025);
+  --w4: rgba(9, 9, 11, 0.035);
+  --w5: rgba(9, 9, 11, 0.045);
+  --w6: rgba(9, 9, 11, 0.06);
+  --w8: rgba(9, 9, 11, 0.07);
+  --w10: rgba(9, 9, 11, 0.09);
+  --w12: rgba(9, 9, 11, 0.11);
+  --w15: rgba(9, 9, 11, 0.14);
+  --w18: rgba(9, 9, 11, 0.17);
+  --w25: rgba(9, 9, 11, 0.22);
+  --w40: rgba(9, 9, 11, 0.40);
+  --w50: rgba(9, 9, 11, 0.55);
+  --w65: rgba(9, 9, 11, 0.70);
+  --w80: rgba(9, 9, 11, 0.85);
+
+  /* ── Glass → solid white panels ── */
+  --glass-bg: var(--bg-elevated);
+  --glass-bg-hover: var(--bg-elevated-hover);
+  --glass-border: var(--border);
+  --glass-border-hover: var(--border-strong);
+  --widget-shadow: 0 1px 2px rgba(9, 9, 11, 0.05), 0 1px 3px rgba(9, 9, 11, 0.06);
+  --widget-shadow-hover: 0 2px 4px rgba(9, 9, 11, 0.07), 0 6px 16px rgba(9, 9, 11, 0.08);
+
+  /* ── Shadows: lighter on a light canvas ── */
+  --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.08);
+  --shadow-md: 0 4px 12px rgba(9, 9, 11, 0.10);
+  --shadow-lg: 0 12px 28px rgba(9, 9, 11, 0.14);
+  --shadow-glass: 0 4px 14px rgba(9, 9, 11, 0.08);
+
+  /* ── Opaque raised surfaces (dropdowns, native selects, modals) ── */
+  --surface-raised: #ffffff;
+  --surface-modal: #ffffff;
+  --surface-tooltip: rgba(30, 30, 30, 0.92);
+
+  /* ── Accent washes: re-derived at lower opacity — translucent accent reads
+     stronger on a light canvas than on black, so it needs less alpha. Still
+     keyed off --accent-rgb, so a light theme's own accent re-tints them all. ── */
+  --accent-a10: rgba(var(--accent-rgb), 0.08);
+  --accent-a15: rgba(var(--accent-rgb), 0.12);
+  --accent-a18: rgba(var(--accent-rgb), 0.14);
+  --accent-a25: rgba(var(--accent-rgb), 0.18);
+  --accent-a35: rgba(var(--accent-rgb), 0.30);
+
+  /* Gemini badge tuned for a light background. */
+  --gemini-fg: #1d4ed8;
+  --gemini-bg: rgba(37, 99, 235, 0.10);
+  --gemini-border: rgba(37, 99, 235, 0.25);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Tauri native titlebar shell
+   Applied only by the desktop app (<html data-tauri-native-titlebar>). The
+   shell is intentionally solid: the whole app should follow theme tokens, not
+   macOS/Windows material translucency.
+   ────────────────────────────────────────────────────────────────────────── */
+:root[data-tauri-native-titlebar] {
+  --radius-sm: 5px;
+  --radius: 7px;
+  --radius-lg: 9px;
+
+  --native-toolbar-bg: var(--glass-bg);
+  --native-toolbar-border: var(--glass-border);
+  --native-control-bg: var(--bg-elevated);
+  --native-control-bg-hover: var(--bg-elevated-hover);
+  --native-control-bg-active: var(--bg-elevated-hover);
+  --native-control-border: var(--glass-border);
+}
+
+:root[data-tauri-macos] {
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', 'GeistMono', ui-monospace, monospace;
+}
+
+:root[data-tauri-windows] {
+  --font: 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --font-mono: 'Cascadia Mono', 'GeistMono', ui-monospace, monospace;
+}
+
+@supports (color: color-mix(in srgb, black, transparent)) {
+  :root[data-tauri-native-titlebar] {
+    --native-control-bg: color-mix(in srgb, var(--bg-elevated-hover) 64%, var(--bg-base));
+    --native-control-bg-hover: var(--bg-elevated-hover);
+    --native-control-bg-active: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated-hover));
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Named theme palettes (popular VS Code themes)
+   Each block sets ONLY its palette — canvas ramp, elevation, accent, text —
+   layering on top of the baseline (dark = :root) or the light-kind block above.
+   These MUST stay after the light-kind block: both are single-attribute
+   selectors of equal specificity, so source order breaks the tie and lets a
+   theme's canvas win over the generic light ramp.
+
+   Convention per theme: neutrals, elevation, surfaces, then --accent +
+   --accent-rgb (drives every wash), --purple (accent hover) and --purple-light
+   (accent-colored text). Alpha washes and shadows are inherited from the
+   kind base, so they retint automatically.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Kairos Dawn — warm amber accent on parchment canvas.
+   "The golden moment" — warm, approachable, inclusive.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-theme='kairos-dawn'] {
+  --bright-white: #1C1917;
+  --white: #292524;
+  --gray: #57534E;
+  --neutral-gray: #78716C;
+  --blue-gray: #FAFAF8;
+  --blue-gray-light: #F5F3EF;
+  --blue-gray-lighter: #E7E5E0;
+  --bg-base: #FAFAF8;
+  --bg-subtle: #F5F3EF;
+  --bg-elevated: #FFFFFF;
+  --bg-elevated-hover: #F9F7F4;
+  --bg-overlay: #FFFFFF;
+  --surface-modal: #FFFFFF;
+  --surface-tooltip: rgba(28, 25, 23, 0.92);
+  --surface-raised: #FFFFFF;
+  --border-subtle: rgba(120, 85, 30, 0.06);
+  --border: rgba(120, 85, 30, 0.10);
+  --border-strong: rgba(120, 85, 30, 0.18);
+  --glass-bg: rgba(255, 255, 255, 0.88);
+  --glass-bg-hover: rgba(255, 255, 255, 0.94);
+  --glass-border: rgba(120, 85, 30, 0.08);
+  --glass-border-hover: rgba(120, 85, 30, 0.14);
+  --w3: rgba(120, 85, 30, 0.02);
+  --w4: rgba(120, 85, 30, 0.03);
+  --w5: rgba(120, 85, 30, 0.04);
+  --w6: rgba(120, 85, 30, 0.05);
+  --w8: rgba(120, 85, 30, 0.06);
+  --w10: rgba(120, 85, 30, 0.08);
+  --w12: rgba(120, 85, 30, 0.10);
+  --w15: rgba(120, 85, 30, 0.12);
+  --w18: rgba(120, 85, 30, 0.15);
+  --w25: rgba(120, 85, 30, 0.20);
+  --w40: rgba(120, 85, 30, 0.32);
+  --w50: rgba(120, 85, 30, 0.42);
+  --w65: rgba(120, 85, 30, 0.55);
+  --w80: rgba(120, 85, 30, 0.72);
+  --shadow-sm: 0 1px 3px rgba(120, 85, 30, 0.08);
+  --shadow-md: 0 4px 16px rgba(120, 85, 30, 0.10);
+  --shadow-lg: 0 12px 40px rgba(120, 85, 30, 0.14);
+  --shadow-glass: 0 2px 20px rgba(120, 85, 30, 0.08);
+  --widget-shadow: 0 1px 2px rgba(120, 85, 30, 0.06), 0 1px 3px rgba(120, 85, 30, 0.05);
+  --widget-shadow-hover: 0 2px 4px rgba(120, 85, 30, 0.07), 0 6px 16px rgba(120, 85, 30, 0.09);
+  --accent: #D97706;
+  --accent-rgb: 217, 119, 6;
+  --purple: #B45309;
+  --purple-light: #92400E;
+  --on-accent: #FFFFFF;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Kairos Dusk — warm amber on stone-dark canvas.
+   "Warm ambient intelligence" — calm, deep, focused.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-theme='kairos-dusk'] {
+  --bright-white: #FAFAF9;
+  --white: #E7E5E4;
+  --gray: #A8A29E;
+  --neutral-gray: #78716C;
+  --blue-gray: #1C1917;
+  --blue-gray-light: #292524;
+  --blue-gray-lighter: #3C3835;
+  --bg-base: #1C1917;
+  --bg-subtle: #211E1C;
+  --bg-elevated: #292524;
+  --bg-elevated-hover: #332F2C;
+  --bg-overlay: #292524;
+  --surface-modal: #292524;
+  --surface-tooltip: rgba(28, 25, 23, 0.95);
+  --surface-raised: #292524;
+  --border-subtle: rgba(255, 200, 100, 0.06);
+  --border: rgba(255, 200, 100, 0.09);
+  --border-strong: rgba(255, 200, 100, 0.15);
+  --glass-bg: rgba(41, 37, 36, 0.78);
+  --glass-bg-hover: rgba(51, 47, 44, 0.90);
+  --glass-border: rgba(255, 200, 100, 0.08);
+  --glass-border-hover: rgba(255, 200, 100, 0.14);
+  --w3: rgba(255, 200, 100, 0.02);
+  --w4: rgba(255, 200, 100, 0.03);
+  --w5: rgba(255, 200, 100, 0.04);
+  --w6: rgba(255, 200, 100, 0.05);
+  --w8: rgba(255, 200, 100, 0.06);
+  --w10: rgba(255, 200, 100, 0.08);
+  --w12: rgba(255, 200, 100, 0.10);
+  --w15: rgba(255, 200, 100, 0.12);
+  --w18: rgba(255, 200, 100, 0.15);
+  --w25: rgba(255, 200, 100, 0.20);
+  --w40: rgba(255, 200, 100, 0.32);
+  --w50: rgba(255, 200, 100, 0.42);
+  --w65: rgba(255, 200, 100, 0.55);
+  --w80: rgba(255, 200, 100, 0.72);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.44);
+  --shadow-glass: 0 2px 20px rgba(0, 0, 0, 0.28);
+  --accent: #F59E0B;
+  --accent-rgb: 245, 158, 11;
+  --purple: #D97706;
+  --purple-light: #FCD34D;
+  --on-accent: #1C1917;
+}
+
+/* Kairos Dark — iOS-inspired dark mode with aqua accent. */
+:root[data-theme='kairos-dark'] {
+  --bright-white: #f5f5f7;
+  --white: #e5e5ea;
+  --gray: #98989d;
+  --neutral-gray: #6e6e73;
+  --blue-gray: #1c1c1e;
+  --blue-gray-light: #2c2c2e;
+  --blue-gray-lighter: #3a3a3c;
+  --bg-base: #1c1c1e;
+  --bg-subtle: #232326;
+  --bg-elevated: #2c2c2e;
+  --bg-elevated-hover: #3a3a3c;
+  --bg-overlay: #2c2c2e;
+  --surface-modal: #2c2c2e;
+  --surface-tooltip: rgba(44, 44, 46, 0.95);
+  --surface-raised: #2c2c2e;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --glass-bg: rgba(44, 44, 46, 0.72);
+  --glass-bg-hover: rgba(58, 58, 60, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.14);
+  --w3: rgba(255, 255, 255, 0.02);
+  --w4: rgba(255, 255, 255, 0.03);
+  --w5: rgba(255, 255, 255, 0.04);
+  --w6: rgba(255, 255, 255, 0.05);
+  --w8: rgba(255, 255, 255, 0.06);
+  --w10: rgba(255, 255, 255, 0.08);
+  --w12: rgba(255, 255, 255, 0.10);
+  --w15: rgba(255, 255, 255, 0.12);
+  --w18: rgba(255, 255, 255, 0.15);
+  --w25: rgba(255, 255, 255, 0.20);
+  --w40: rgba(255, 255, 255, 0.32);
+  --w50: rgba(255, 255, 255, 0.42);
+  --w65: rgba(255, 255, 255, 0.55);
+  --w80: rgba(255, 255, 255, 0.72);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.40);
+  --shadow-glass: 0 2px 20px rgba(0, 0, 0, 0.24);
+  --accent: #0a84ff;
+  --accent-rgb: 10, 132, 255;
+  --purple: #5e5ce6;
+  --purple-light: #64d2ff;
+}
+
+/* Dracula. */
+:root[data-theme='dracula'] {
+  --bright-white: #f8f8f2;
+  --white: #e2e2dc;
+  --gray: #9ea3c0;
+  --neutral-gray: #6272a4;
+  --blue-gray: #282a36;
+  --blue-gray-light: #343746;
+  --blue-gray-lighter: #424458;
+  --bg-base: #282a36;
+  --bg-subtle: #2d2f3d;
+  --bg-elevated: #343746;
+  --bg-elevated-hover: #3c3f52;
+  --bg-overlay: #343746;
+  --surface-modal: #343746;
+  --surface-tooltip: #21222c;
+  --surface-raised: #343746;
+  --accent: #bd93f9;
+  --accent-rgb: 189, 147, 249;
+  --purple: #caa9fa;
+  --purple-light: #ff79c6;
+}
+
+/* Nord. */
+:root[data-theme='nord'] {
+  --bright-white: #eceff4;
+  --white: #d8dee9;
+  --gray: #a6adbb;
+  --neutral-gray: #7b8394;
+  --blue-gray: #2e3440;
+  --blue-gray-light: #3b4252;
+  --blue-gray-lighter: #434c5e;
+  --bg-base: #2e3440;
+  --bg-subtle: #333a47;
+  --bg-elevated: #3b4252;
+  --bg-elevated-hover: #434c5e;
+  --bg-overlay: #3b4252;
+  --surface-modal: #3b4252;
+  --surface-tooltip: #2e3440;
+  --surface-raised: #3b4252;
+  --accent: #88c0d0;
+  --accent-rgb: 136, 192, 208;
+  --purple: #8fbcbb;
+  --purple-light: #81a1c1;
+}
+
+/* Catppuccin Mocha. */
+:root[data-theme='catppuccin-mocha'] {
+  --bright-white: #cdd6f4;
+  --white: #bac2de;
+  --gray: #9399b2;
+  --neutral-gray: #7f849c;
+  --blue-gray: #1e1e2e;
+  --blue-gray-light: #313244;
+  --blue-gray-lighter: #45475a;
+  --bg-base: #1e1e2e;
+  --bg-subtle: #24243a;
+  --bg-elevated: #313244;
+  --bg-elevated-hover: #383a52;
+  --bg-overlay: #313244;
+  --surface-modal: #313244;
+  --surface-tooltip: #181825;
+  --surface-raised: #313244;
+  --accent: #89b4fa;
+  --accent-rgb: 137, 180, 250;
+  --purple: #89b4fa;
+  --purple-light: #cba6f7;
+}
+
+/* Solarized Light. */
+:root[data-theme='solarized-light'] {
+  --bright-white: #073642;
+  --white: #586e75;
+  --gray: #657b83;
+  --neutral-gray: #839496;
+  --blue-gray: #fdf6e3;
+  --blue-gray-light: #eee8d5;
+  --blue-gray-lighter: #e3ddc7;
+  --bg-base: #fdf6e3;
+  --bg-subtle: #f5efdc;
+  --bg-elevated: #fffbf0;
+  --bg-elevated-hover: #f2ecd6;
+  --bg-overlay: #fffbf0;
+  --border-subtle: rgba(7, 54, 66, 0.07);
+  --border: rgba(7, 54, 66, 0.12);
+  --border-strong: rgba(7, 54, 66, 0.20);
+  --surface-modal: #fffbf0;
+  --surface-tooltip: rgba(30, 30, 30, 0.92);
+  --surface-raised: #fffbf0;
+  --accent: #268bd2;
+  --accent-rgb: 38, 139, 210;
+  --purple: #2076b8;
+  --purple-light: #cb4b16;
+}
+
+/* Catppuccin Latte — Catppuccin's light flavor. */
+:root[data-theme='catppuccin-latte'] {
+  --bright-white: #4c4f69;
+  --white: #5c5f77;
+  --gray: #6c6f85;
+  --neutral-gray: #8c8fa1;
+  --blue-gray: #eff1f5;
+  --blue-gray-light: #e6e9ef;
+  --blue-gray-lighter: #dce0e8;
+  --bg-base: #eff1f5;
+  --bg-subtle: #e6e9ef;
+  --bg-elevated: #ffffff;
+  --bg-elevated-hover: #f4f5f8;
+  --bg-overlay: #ffffff;
+  --border-subtle: rgba(76, 79, 105, 0.07);
+  --border: rgba(76, 79, 105, 0.12);
+  --border-strong: rgba(76, 79, 105, 0.20);
+  --surface-modal: #ffffff;
+  --surface-tooltip: rgba(30, 30, 30, 0.92);
+  --surface-raised: #ffffff;
+  --accent: #1e66f5;
+  --accent-rgb: 30, 102, 245;
+  --purple: #1a5cdb;
+  --purple-light: #8839ef;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   App Mode visibility gating.
+   Elements self-declare their mode requirement via [data-requires-mode].
+   The active mode on <html data-app-mode="X"> hides non-matching elements.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Developer-only elements: hidden unless in developer mode */
+:root:not([data-app-mode='developer']) [data-requires-mode='developer'] {
+  display: none !important;
+}
+/* Hide advanced/technical elements in kids mode */
+:root[data-app-mode='kids'] [data-hide-in='kids'],
+:root[data-app-mode='kids'] [data-requires-mode='developer'],
+:root[data-app-mode='kids'] [data-requires-mode='professional'] {
+  display: none !important;
+}
+/* Professional mode: hide developer-only, show professional */
+:root[data-app-mode='professional'] [data-requires-mode='developer'] {
+  display: none !important;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Prevent tab switches between short and scrollable views from nudging the
+     fixed-width header actions as the document scrollbar appears/disappears. */
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--font-size-md);
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.01em;
+  background-color: var(--bg-base);
+  /* Soft aqua gradient — macOS-inspired ambient light */
+  background-image:
+    radial-gradient(ellipse 100% 80% at 50% 0%, rgba(var(--accent-rgb), 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 60% at 100% 100%, rgba(88, 86, 214, 0.04) 0%, transparent 40%);
+  background-attachment: fixed;
+  color: var(--color-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme-kind='light'] body {
+  background-image:
+    radial-gradient(ellipse 100% 80% at 50% 0%, rgba(var(--accent-rgb), 0.05) 0%, transparent 50%);
+}
+
+:root[data-tauri-native-titlebar] body {
+  font-feature-settings: normal;
+}
+
+::selection {
+  background: var(--accent-a50);
+  color: var(--on-accent);
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--w8);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--w15);
+}

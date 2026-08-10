@@ -1,12 +1,8 @@
-export type {
-  Provider,
-  ProviderMessage,
-  ProviderResponse,
-  ModelInfo,
-  ProviderOptions,
-} from "./types.js";
-export { OllamaProvider } from "./ollama.js";
-export { OpenAIProvider } from "./openai.js";
-export { AnthropicProvider } from "./anthropic.js";
-export { SmartRouter, type RouterConfig, type RouteDecision } from "./router.js";
-export { createProvider, detectProviders } from "./factory.js";
+export * from './types.js';
+export { OllamaProvider } from './ollama.js';
+export { AnthropicProvider } from './anthropic.js';
+export { OpenAIProvider } from './openai.js';
+export { GeminiProvider } from './gemini.js';
+export { CustomHttpProvider, type CustomHttpConfig } from './custom-http.js';
+export { ProviderRegistry, type RegistryConfig } from './registry.js';
+export { SmartRouter, type RouterConfig } from './router.js';

@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Polygent Startup Error</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f5ef;
+      color: #18181b;
+    }
+    main {
+      box-sizing: border-box;
+      max-width: 720px;
+      padding: 48px;
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+    }
+    p {
+      line-height: 1.55;
+    }
+    code {
+      display: block;
+      margin-top: 16px;
+      padding: 16px;
+      white-space: pre-wrap;
+      border: 1px solid #d6d3c8;
+      border-radius: 12px;
+      background: #fffdf7;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Polygent could not start its local backend</h1>
+    <p>The desktop shell is still running, but the in-process Rust backend failed during startup. If this is a port conflict, stop the other Polygent instance or set <code>POLYGENT_PORT</code> before launching.</p>
+    <code id="detail"></code>
+  </main>
+  <script>
+    document.getElementById('detail').textContent =
+      window.__POLYGENT_STARTUP_ERROR__ || 'Unknown startup error.';
+  </script>
+</body>
+</html>

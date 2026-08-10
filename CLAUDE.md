@@ -1,82 +1,60 @@
-# Kairos — Development Handoff
+# Kairos v2 — Development Guide
 
 ## What is this?
 
-Kairos is a universal, LLM-agnostic orchestrator with a browser-based dashboard. It automatically decides orchestration patterns (parallel, sequential, hierarchical, handoff, loop) and works with ANY CLI-based LLM tool.
+Kairos is a universal, LLM-agnostic AI orchestrator. It runs multi-agent workflows with DAG-based orchestration, works with any CLI-based LLM tool (Ollama, Claude, Goose, etc.), and ships as a desktop app (Tauri 2) for macOS, Linux, and Windows.
 
 ## Architecture
 
 ```
 packages/
-├── core/        — Coordinator (NLP-based pattern selection, subtask extraction)
-├── runtime/     — LLM runtime abstraction
-│   └── adapters/
-│       ├── cli.ts         — Universal CLI adapter (works with any LLM tool)
-│       └── claude-code.ts — Claude-specific adapter (legacy, being replaced by cli.ts)
-├── web/         — Dashboard server + frontend (WebSocket, stream-json parsing)
-├── security/    — Input classification, redaction, audit
-├── providers/   — LLM provider routing (Anthropic, Ollama)
-├── cli/         — CLI entry point
-└── test-utils/  — Shared test helpers
+├── protocol/      — ACP types + JSON-RPC 2.0 codec (zero deps)
+├── shared/        — Themes (14), design tokens, constants
+├── providers/     — LLM provider abstraction (Ollama, Anthropic, OpenAI)
+├── orchestrator/  — DAG engine, pipeline state machine, plan parser, worktree manager
+├── agents/        — Agent process lifecycle, CLI adapter, Ollama HTTP adapter, pool
+├── server/        — Express backend + WebSocket hub (standalone, no Tauri dep)
+├── ui/            — Lit 3 web components (the entire frontend)
+├── desktop/       — Tauri 2 shell (sidecar wrapper, paper-thin)
+└── cli/           — CLI entry point
 ```
-
-## Key Design Decisions
-
-1. **LLM-agnostic**: The `CLIRuntime` adapter works with any tool that accepts prompts. Configure via `~/.kairos/config.json`.
-2. **Interactive mode (no -p)**: Agents run as persistent processes with stdin open. This enables real-time permission handling, multi-turn conversation, and follow-ups without spawning new processes.
-3. **Stream-json parsing**: For Claude, we parse `--output-format stream-json --verbose` events (thinking, text, tool_use, tool_result, result) and forward them to the browser via WebSocket.
-4. **Permission handling**: Permission denials are shown as informational warnings. Users can "Retry with full access" which adds `--dangerously-skip-permissions`.
-5. **Auto-detection**: `detectTools()` scans for installed LLM tools (claude, ollama, aichat, etc.) and creates a runtime automatically.
-
-## Configuration
-
-User config lives at `~/.kairos/config.json`:
-```json
-{
-  "command": "devai",
-  "args": ["launch", "claude", "--output-format", "stream-json", "--verbose"],
-  "promptMode": "stdin",
-  "systemPrompt": "You are an agent inside Kairos orchestrator..."
-}
-```
-
-For other tools: `{ "command": "ollama", "args": ["run", "llama3", "{prompt}"] }`
 
 ## Running
 
 ```bash
 npm install
-npm run build
-npm start          # Starts dashboard at http://localhost:3000
+npm run build                    # Build all packages
+npm start                        # Server + UI at http://localhost:3333
+
+# Development (hot-reload)
+npm run dev                      # Concurrently: server (tsx watch) + UI (vite :5173)
+
+# Desktop
+npm run desktop:dev              # Tauri dev mode
+npm run desktop:build            # Produce .dmg / .deb / .msi
 ```
 
-## Testing
+## Key Design Decisions
 
-```bash
-npm test           # All tests
-npm run test:ci    # With coverage
-```
+1. **Web-first, desktop via sidecar**: The Express server is fully standalone. Tauri just spawns it and points a webview at it.
+2. **LLM-agnostic**: `AgentPool` spawns any CLI tool. `OllamaHttpAgent` talks directly to Ollama's REST API for zero-overhead local inference.
+3. **DAG orchestration**: Markdown plans are parsed into `PipelineDefinition` graphs. The engine executes ready phases in parallel, pauses at gates, supports loops.
+4. **Event-sourced state**: Every pipeline transition emits events → broadcast via WebSocket → UI updates in real-time.
+5. **Provider routing**: `SmartRouter` selects models by privacy → budget → preference → complexity.
 
-## Current State & Next Steps
+## WebSocket Protocol
 
-### Working
-- Dashboard with real-time streaming conversation (thinking, tool calls, results)
-- Coordinator pattern selection (parallel, sequential, hierarchical, loop, handoff)
-- Permission denial detection and "Retry with full access" UX
-- Multi-agent sidebar with alert badges
-- Shell command execution (`!command`) and Claude commands (`/command`)
-- Follow-up messages in same agent session via stdin
+Client → Server:
+- `agent:spawn`, `agent:kill`, `prompt`
+- `pipeline:start`, `pipeline:cancel`, `gate:decide`
 
-### Needs Work
-- **True interactive permissions**: Claude in `-p` mode can't pause for permission grants. The stdin-based interactive mode (without `-p`) is configured but needs end-to-end testing for permission prompts that actually pause and wait.
-- **Multi-turn without `-p`**: The process should stay running after the first result, accepting new prompts on stdin. Currently the process exits after one turn.
-- **Agent lifecycle**: Long-running agents, graceful shutdown, session resume.
-- **Non-Claude streaming**: Generic progress detection for tools that don't support stream-json.
-- **Tests**: Integration tests for the streaming pipeline and WebSocket protocol.
+Server → Client:
+- `init`, `agent:spawned`, `agent:output`, `agent:status`, `agent:exit`
+- `pipeline:state`, `pipeline:event`, `pipeline:gate`, `error`
 
 ## Code Conventions
 
 - TypeScript, ES modules (`"type": "module"`)
-- `tsup` for builds, `vitest` for tests
-- Event-driven architecture: runtime emits typed events, server forwards via WebSocket
-- Debug logging: set `KAIROS_DEBUG=1` for verbose runtime logs
+- `tsup` for library packages, `vite` for UI
+- Lit 3 web components with `@state()` decorators
+- Event-driven: engines emit typed events, hub broadcasts to WebSocket clients

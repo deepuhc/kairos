@@ -1,192 +1,84 @@
-/**
- * Smart model router.
- * Routes requests to the optimal provider based on:
- * - Task complexity (simple → cheap/fast model, complex → powerful model)
- * - Budget remaining (auto-downgrade when near limit)
- * - Data sensitivity (restricted → local only)
- * - Latency requirements (real-time → local, batch → cloud)
- * - Availability (fallback if primary is down)
- */
-
-import type { Provider, ProviderMessage, ProviderOptions, ProviderResponse, ModelInfo } from "./types.js";
-import type { DataClass } from "@kairos/security";
+import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult } from './types.js';
+import type { ProviderRegistry } from './registry.js';
 
 export interface RouterConfig {
-  /** Available providers in preference order */
-  providers: Provider[];
-  /** Default model for general use */
-  defaultModel: string;
-  /** Budget limit in USD (optional) */
-  budgetLimit?: number;
-  /** Data classification for this session */
-  dataClassification?: DataClass;
-  /** Prefer local models (even if cloud is available) */
   preferLocal?: boolean;
-}
-
-export interface RouteDecision {
-  provider: Provider;
-  model: string;
-  reason: string;
+  maxBudgetUsd?: number;
+  spentUsd?: number;
+  defaultModel?: string;
 }
 
 export class SmartRouter {
+  private registry: ProviderRegistry;
   private config: RouterConfig;
-  private spentUsd = 0;
-  private availableModels: ModelInfo[] = [];
-  private initialized = false;
 
-  constructor(config: RouterConfig) {
-    this.config = config;
+  constructor(registry: ProviderRegistry, config?: RouterConfig) {
+    this.registry = registry;
+    this.config = config || {};
   }
 
-  /** Initialize by checking provider availability */
-  async initialize(): Promise<void> {
-    const models: ModelInfo[] = [];
-    for (const provider of this.config.providers) {
-      if (await provider.isAvailable()) {
-        const providerModels = await provider.listModels();
-        models.push(...providerModels);
-      }
-    }
-    this.availableModels = models;
-    this.initialized = true;
-  }
+  async selectModel(options?: { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): Promise<{ provider: Provider; model: ModelInfo } | null> {
+    const models = await this.registry.listAllModels();
+    if (models.length === 0) return null;
 
-  /** Get current spend */
-  get spent(): number {
-    return this.spentUsd;
-  }
+    let candidates = models;
 
-  /** Get budget remaining (Infinity if no limit) */
-  get budgetRemaining(): number {
-    return this.config.budgetLimit
-      ? this.config.budgetLimit - this.spentUsd
-      : Infinity;
-  }
-
-  /**
-   * Route a request to the best provider/model.
-   */
-  async route(
-    messages: ProviderMessage[],
-    options: Partial<ProviderOptions> & { complexity?: "low" | "medium" | "high" }
-  ): Promise<ProviderResponse> {
-    if (!this.initialized) await this.initialize();
-
-    const decision = this.decide(options);
-    const provider = decision.provider;
-
-    const fullOptions: ProviderOptions = {
-      model: decision.model,
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-      tools: options.tools,
-      stream: options.stream,
-    };
-
-    const response = await provider.complete(messages, fullOptions);
-    this.spentUsd += response.costUsd;
-
-    return response;
-  }
-
-  /**
-   * Decide which provider and model to use.
-   */
-  decide(
-    options: Partial<ProviderOptions> & { complexity?: "low" | "medium" | "high" }
-  ): RouteDecision {
-    // Rule 1: Restricted data → local only
-    if (this.config.dataClassification === "restricted") {
-      const localProvider = this.config.providers.find((p) => p.isLocal);
-      if (!localProvider) {
-        throw new Error(
-          "Restricted data requires a local model, but no local provider is available. " +
-          "Install Ollama (https://ollama.ai) to process sensitive data."
-        );
-      }
-      return {
-        provider: localProvider,
-        model: this.bestLocalModel(),
-        reason: "Restricted data — using local model only",
-      };
+    // Rule 1: Privacy — if local required, filter to local only
+    if (options?.requireLocal || this.config.preferLocal) {
+      const localModels = candidates.filter((m) => m.isLocal);
+      if (localModels.length > 0) candidates = localModels;
+      else if (options?.requireLocal) return null;
     }
 
-    // Rule 2: Budget nearly exhausted → cheapest option
-    if (this.config.budgetLimit && this.budgetRemaining < 0.10) {
-      const localProvider = this.config.providers.find((p) => p.isLocal);
-      if (localProvider) {
-        return {
-          provider: localProvider,
-          model: this.bestLocalModel(),
-          reason: "Budget nearly exhausted — switching to free local model",
-        };
+    // Rule 2: Budget — if near limit, prefer free (local) models
+    if (this.config.maxBudgetUsd && this.config.spentUsd) {
+      const remaining = this.config.maxBudgetUsd - this.config.spentUsd;
+      if (remaining < 0.01) {
+        candidates = candidates.filter((m) => m.isLocal);
+        if (candidates.length === 0) return null;
       }
     }
 
-    // Rule 3: Prefer local if configured
-    if (this.config.preferLocal) {
-      const localProvider = this.config.providers.find((p) => p.isLocal);
-      if (localProvider) {
-        return {
-          provider: localProvider,
-          model: this.bestLocalModel(),
-          reason: "Local preference enabled",
-        };
+    // Rule 3: Complexity routing
+    if (options?.complexity === 'high') {
+      const powerful = candidates.filter((m) =>
+        m.capabilities?.includes('reasoning') || (m.costPerMillionOutput && m.costPerMillionOutput > 10)
+      );
+      if (powerful.length > 0) candidates = powerful;
+    } else if (options?.complexity === 'low') {
+      const cheap = candidates.filter((m) => m.isLocal || (m.costPerMillionInput && m.costPerMillionInput < 2));
+      if (cheap.length > 0) candidates = cheap;
+    }
+
+    // Rule 4: If user specified a default, try that first
+    if (this.config.defaultModel) {
+      const preferred = candidates.find((m) => m.id === this.config.defaultModel);
+      if (preferred) {
+        const provider = this.registry.getProviderForModel(preferred.id, models);
+        if (provider) return { provider, model: preferred };
       }
     }
 
-    // Rule 4: Route by complexity
-    const complexity = options.complexity ?? "medium";
-    const targetModel = this.modelForComplexity(complexity);
+    // Fallback: pick first available candidate (local models first)
+    candidates.sort((a, b) => (a.isLocal === b.isLocal ? 0 : a.isLocal ? -1 : 1));
+    const selected = candidates[0];
+    const provider = this.registry.getProviderForModel(selected.id, models);
+    if (!provider) return null;
 
-    const provider = this.config.providers.find((p) =>
-      this.availableModels.some(
-        (m) => m.id === targetModel && m.provider === p.name
-      )
-    );
-
-    if (provider) {
-      return { provider, model: targetModel, reason: `Complexity: ${complexity}` };
-    }
-
-    // Fallback to default
-    const defaultProvider = this.config.providers.find((p) =>
-      this.availableModels.some(
-        (m) => m.id === this.config.defaultModel && m.provider === p.name
-      )
-    ) ?? this.config.providers[0];
-
-    return {
-      provider: defaultProvider,
-      model: this.config.defaultModel,
-      reason: "Fallback to default",
-    };
+    return { provider, model: selected };
   }
 
-  private bestLocalModel(): string {
-    const localModels = this.availableModels.filter((m) => m.isLocal);
-    return localModels[0]?.id ?? "ollama/llama3.2";
+  async complete(messages: Message[], options?: CompletionOptions & { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): Promise<CompletionResult> {
+    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal });
+    if (!selection) throw new Error('No available models');
+
+    return selection.provider.complete(messages, { ...options, model: options?.model || selection.model.id });
   }
 
-  private modelForComplexity(complexity: "low" | "medium" | "high"): string {
-    const sorted = [...this.availableModels].sort(
-      (a, b) =>
-        a.costPerInputToken + a.costPerOutputToken -
-        (b.costPerInputToken + b.costPerOutputToken)
-    );
+  async *stream(messages: Message[], options?: CompletionOptions & { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): AsyncIterable<string> {
+    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal });
+    if (!selection) throw new Error('No available models');
 
-    switch (complexity) {
-      case "low":
-        // Cheapest available
-        return sorted[0]?.id ?? this.config.defaultModel;
-      case "high":
-        // Most expensive (presumably most capable)
-        return sorted[sorted.length - 1]?.id ?? this.config.defaultModel;
-      case "medium":
-      default:
-        return this.config.defaultModel;
-    }
+    yield* selection.provider.stream(messages, { ...options, model: options?.model || selection.model.id });
   }
 }
