@@ -180,6 +180,50 @@ describe('AnthropicProvider', () => {
       await expect(provider.complete([{ role: 'user', content: 'hi' }]))
         .rejects.toThrow('Anthropic error: 429');
     });
+
+    it('defaults to claude-opus-4-8 when no model is given', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ content: [{ type: 'text', text: 'ok' }], model: 'claude-opus-4-8', usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'end_turn' }),
+      });
+      await provider.complete([{ role: 'user', content: 'hi' }]);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.model).toBe('claude-opus-4-8');
+    });
+
+    it('omits thinking and output_config by default', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ content: [{ type: 'text', text: 'ok' }], model: 'claude-opus-4-8', usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'end_turn' }),
+      });
+      await provider.complete([{ role: 'user', content: 'hi' }]);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body).not.toHaveProperty('thinking');
+      expect(body).not.toHaveProperty('output_config');
+    });
+
+    it('sends adaptive thinking (never the deprecated enabled/budget_tokens shape)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ content: [{ type: 'text', text: 'ok' }], model: 'claude-opus-4-8', usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'end_turn' }),
+      });
+      await provider.complete([{ role: 'user', content: 'hi' }], { thinking: true });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.thinking).toEqual({ type: 'adaptive' });
+      // Guard against regressing to the legacy format rejected by Opus 4.8.
+      expect(body.thinking.type).not.toBe('enabled');
+      expect(body.thinking).not.toHaveProperty('budget_tokens');
+    });
+
+    it('maps effort to output_config.effort', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ content: [{ type: 'text', text: 'ok' }], model: 'claude-opus-4-8', usage: { input_tokens: 1, output_tokens: 1 }, stop_reason: 'end_turn' }),
+      });
+      await provider.complete([{ role: 'user', content: 'hi' }], { thinking: true, effort: 'high' });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.output_config).toEqual({ effort: 'high' });
+    });
   });
 
   describe('streamChunks', () => {
@@ -229,6 +273,34 @@ describe('AnthropicProvider', () => {
         chunks.push(chunk);
       }
       expect(chunks[0]).toMatchObject({ type: 'error' });
+    });
+
+    it('applies adaptive thinking, effort, and temperature to the streamed request', async () => {
+      const encoder = new TextEncoder();
+      let readCount = 0;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: vi.fn().mockImplementation(() => {
+              if (readCount === 0) { readCount++; return Promise.resolve({ done: false, value: encoder.encode('data: [DONE]\n') }); }
+              return Promise.resolve({ done: true, value: undefined });
+            }),
+          }),
+        },
+      });
+
+      const chunks: import('../types.js').StreamChunk[] = [];
+      for await (const chunk of provider.streamChunks!([{ role: 'user', content: 'hi' }], { thinking: true, effort: 'medium', temperature: 0.5 })) {
+        chunks.push(chunk);
+      }
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.stream).toBe(true);
+      expect(body.thinking).toEqual({ type: 'adaptive' });
+      expect(body.output_config).toEqual({ effort: 'medium' });
+      expect(body.temperature).toBe(0.5);
+      expect(body.thinking).not.toHaveProperty('budget_tokens');
     });
   });
 

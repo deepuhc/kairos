@@ -653,6 +653,10 @@ export class DevaiApp extends LitElement {
       flex: 1 1 auto;
       min-height: 0;
       width: 100%;
+      /* border-box so width:100% + padding stays within the viewport; without
+         it the 24px horizontal padding pushed content 48px past the edge, which
+         overflow-x:hidden then silently clipped (e.g. History's Refresh pill). */
+      box-sizing: border-box;
       padding: 24px;
       overflow-x: hidden;
       overflow-y: auto;

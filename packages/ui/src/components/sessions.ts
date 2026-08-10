@@ -47,8 +47,41 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-function shortDir(dir: string): string {
-  const home = '/Users/' + (window as any).USER || '';
+// Map a raw fetch/error message to something a user can act on. The standalone
+// dev server has no /api/sessions route, so a bare "Not Found" is common and
+// meaningless on its own — reframe it as an availability problem. Pure/exported.
+export function friendlyError(message: string): string {
+  const m = (message || '').trim();
+  if (!m || /not found|404/i.test(m)) {
+    return 'Session history is unavailable right now. It may not be supported by this server.';
+  }
+  if (/failed to fetch|networkerror|load failed/i.test(m)) {
+    return "Couldn't reach the server. Check that it's running and try again.";
+  }
+  return m;
+}
+
+// Compute the tool-filter pill set (excluding the always-present 'all'): the
+// union of agents seen in session history (`used`) and installed agents. It
+// accumulates onto `previous` so pills never vanish when the user narrows the
+// list by tool — otherwise filtering to one agent would drop every other pill.
+// Pure and exported for unit testing.
+export function deriveToolOptions(
+  used: Iterable<string>,
+  installed: Iterable<string>,
+  previous: Iterable<string> = [],
+): string[] {
+  const set = new Set<string>(previous);
+  for (const t of used) if (t) set.add(t);
+  for (const id of installed) if (id) set.add(id);
+  return [...set].sort();
+}
+
+// Exported for unit testing. `user` is the current OS username (window.USER at
+// runtime); when it's known we tilde-shorten that exact home dir first, then
+// fall back to a best-effort regex for any other user's home.
+export function shortDir(dir: string, user?: string): string {
+  const home = user ? '/Users/' + user : '';
   if (home && dir.startsWith(home)) return '~' + dir.slice(home.length);
   // Best-effort tilde-shortening
   return dir.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
@@ -403,6 +436,10 @@ export class DevaiSessions extends LitElement {
       color: var(--red);
     }
     .err {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       padding: 12px;
       background: var(--red-a15);
       color: var(--red);
@@ -410,14 +447,28 @@ export class DevaiSessions extends LitElement {
       border-radius: var(--radius-lg);
       margin-bottom: 12px;
     }
+    .err-retry {
+      flex-shrink: 0;
+      padding: 5px 14px;
+      border: 1px solid var(--red-a25);
+      border-radius: var(--radius);
+      background: var(--red-a15);
+      color: var(--red);
+      font-family: var(--font);
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .err-retry:hover { background: var(--red); color: var(--bright-white); border-color: var(--red); }
     .loading, .empty {
       padding: 32px;
       text-align: center;
       color: var(--gray);
     }
+    /* Pushed to the right edge on wide rows; wraps as one atomic group when the
+       header runs out of horizontal room, so Refresh is never clipped. */
     .toolbar-right {
-      display: flex;
-      gap: 8px;
       margin-left: auto;
     }
     .delete-backdrop {
@@ -504,28 +555,31 @@ export class DevaiSessions extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.load();
-    this.loadToolOptions();
+    this.loadInstalledAgents();
   }
 
-  // Build the tool-filter pill set from real data: agents seen in session
-  // history (used) unioned with installed agents. Both fetches are best-effort
-  // — a failure just leaves the 'all' pill on its own rather than blocking the
-  // list. Sessions are fetched unfiltered by tool (a wide `since`) so the "used"
-  // set reflects every agent, not just those matching the active pill.
-  private async loadToolOptions() {
-    const used = new Set<string>();
-    const installed = new Set<string>();
-    const [sessionsRes, agentsRes] = await Promise.allSettled([
-      getSessions({ all: true, since: '90d' }),
-      getAgents(),
-    ]);
-    if (sessionsRes.status === 'fulfilled') {
-      for (const s of sessionsRes.value.sessions) if (s.tool) used.add(s.tool);
+  // The installed-agents baseline for the tool-filter pills. Fetched once,
+  // best-effort — a failure just means pills come only from used history. Kept
+  // separate from `load()` so it survives re-filtering (installed agents should
+  // stay offered even when the current filter matches no sessions).
+  private installedAgents: string[] = [];
+
+  private async loadInstalledAgents() {
+    try {
+      const { agents } = await getAgents();
+      this.installedAgents = agents.filter((a) => a.installed).map((a) => a.id);
+      this.refreshToolOptions();
+    } catch {
+      // No installed baseline — pills fall back to used-history only.
     }
-    if (agentsRes.status === 'fulfilled') {
-      for (const a of agentsRes.value.agents) if (a.installed) installed.add(a.id);
-    }
-    this.toolOptions = [...new Set([...used, ...installed])].sort();
+  }
+
+  // Recompute the pill set from the currently-loaded sessions plus the installed
+  // baseline, accumulating onto the existing options so narrowing by tool never
+  // drops pills. Cheap; called after each load and after the agents fetch.
+  private refreshToolOptions() {
+    const used = this.sessions.map((s) => s.tool);
+    this.toolOptions = deriveToolOptions(used, this.installedAgents, this.toolOptions);
   }
 
   private async load() {
@@ -540,6 +594,7 @@ export class DevaiSessions extends LitElement {
         since: this.since,
       });
       this.sessions = res.sessions;
+      this.refreshToolOptions();
       this.selectedIds = pruneSessionSelection(this.selectedIds, res.sessions);
       if (this.selectedIds.size === 0) this.confirmingBulkDelete = false;
     } catch (err: any) {
@@ -661,6 +716,10 @@ export class DevaiSessions extends LitElement {
 
   private sessionTitle(s: SessionEntry): string {
     return s.title || s.firstMessage || s.id.slice(0, 8);
+  }
+
+  private friendlyError(message: string): string {
+    return friendlyError(message);
   }
 
   private formatBulkFailureMessage(deleted: number, failures: Array<{ id: string; error: string }>): string {
@@ -851,7 +910,12 @@ export class DevaiSessions extends LitElement {
     return html`
       <h2>History</h2>
       <div class="subtitle">Browse, search, and resume every AI coding session across all projects.</div>
-      ${this.error ? html`<div class="err">${this.error}</div>` : ''}
+      ${this.error
+        ? html`<div class="err">
+            <span>${this.friendlyError(this.error)}</span>
+            <button class="err-retry" @click=${() => this.load()}>Retry</button>
+          </div>`
+        : ''}
       <div class="header">
         <input
           class="search"
@@ -885,6 +949,7 @@ export class DevaiSessions extends LitElement {
             >${s}</button>
           `)}
         </div>
+        <div class="pill-group toolbar-right">
           <button
             class="pill-btn ${this.activeOnly ? 'active' : ''}"
             ${tooltip('Only sessions with running processes')}
@@ -895,13 +960,14 @@ export class DevaiSessions extends LitElement {
             ${tooltip("Only show sessions in the server's current directory")}
             @click=${async () => { this.cwdOnly = !this.cwdOnly; await this.load(); }}
           >Here</button>
-          <div class="toolbar-right">
-            <button class="pill-btn" @click=${() => this.load()}>Refresh</button>
-          </div>
+          <button class="pill-btn" @click=${() => this.load()}>Refresh</button>
         </div>
+      </div>
         ${filtered.length > 0 || this.selectedIds.size > 0 ? this.renderBulkBar(filtered) : nothing}
         ${filtered.length === 0
-          ? this.filter.trim() || this.cwdOnly
+          ? this.error
+            ? nothing
+            : this.filter.trim() || this.cwdOnly
             ? emptyState({
                 icon: icon.circle(22),
                 title: 'No matching sessions',
@@ -967,7 +1033,7 @@ export class DevaiSessions extends LitElement {
             ${s.active ? html`<span class="active-dot"></span>` : ''}
             ${hasAgentLogo(s.tool) ? html`<agent-logo .agent=${s.tool} .size=${13}></agent-logo>` : nothing} ${s.tool}
           </span>
-          <span class="dir" ${tooltip(s.dir)} @click=${() => this.navigateToWorkspace(s.dir)}>${shortDir(s.dir)}</span>
+          <span class="dir" ${tooltip(s.dir)} @click=${() => this.navigateToWorkspace(s.dir)}>${shortDir(s.dir, (window as any).USER)}</span>
           <span class="when" ${tooltip(s.lastActive)}>${relativeTime(s.lastActive)}</span>
           <div class="actions">
             <button
