@@ -21,10 +21,13 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.8",
     "concurrently": "^9.1.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "@vitest/coverage-v8": "^2.1.8"
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "marked": "^14.1.4"
   }
 }
