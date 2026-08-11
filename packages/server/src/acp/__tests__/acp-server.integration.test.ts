@@ -16,10 +16,13 @@ let server: Server;
 
 afterEach(() => new Promise<void>((r) => server?.close(() => r())));
 
-function boot(): Promise<{ port: number; hub: WebSocketHub }> {
+function boot(acpOpts: { heartbeatMs?: number } = {}): Promise<{ port: number; hub: WebSocketHub }> {
   server = createServer();
   const hub = new WebSocketHub();
-  const acp = new AcpServer({ createAgent: () => new FakeAcpAgent({ requestPermission: true }) });
+  const acp = new AcpServer({
+    createAgent: () => new FakeAcpAgent({ requestPermission: true }),
+    ...acpOpts,
+  });
 
   server.on('upgrade', (req, socket, head) => {
     const { pathname } = new URL(req.url ?? '', 'http://localhost');
@@ -112,6 +115,18 @@ describe('AcpServer over a real WebSocket', () => {
     const ws = await connect(`ws://localhost:${port}/ws`);
     ws.send(JSON.stringify({ type: 'agent:kill', agentId: 'x' }));
     await gotInit; // hub received a /ws message → coexistence proven
+    ws.close();
+  });
+
+  it('sends heartbeat pings the client answers with pongs', async () => {
+    const { port } = await boot({ heartbeatMs: 40 });
+    const ws = await connect(`ws://localhost:${port}/acp?agent=test&cwd=/tmp`);
+    // `ws` auto-replies to pings with pongs; assert the server actually pings.
+    const gotPing = await new Promise<boolean>((resolve) => {
+      ws.on('ping', () => resolve(true));
+      setTimeout(() => resolve(false), 1000);
+    });
+    expect(gotPing).toBe(true);
     ws.close();
   });
 });

@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex as NodeDuplex } from 'node:stream';
 import { AcpConnection, type Duplex } from './connection.js';
+import { ConnectionMonitor } from './connection-monitor.js';
 import type { AcpAgent } from './peer.js';
 
 const CLOSE_BAD_UPGRADE = 4400;
@@ -12,6 +13,10 @@ export interface AcpServerOptions {
    * query params (acp.ts connects to `/acp?agent=<id>&cwd=<path>`).
    */
   createAgent: (info: { agentId: string; cwd: string }) => AcpAgent;
+  /** Heartbeat interval in ms (default 30_000). */
+  heartbeatMs?: number;
+  /** Close a connection whose send buffer exceeds this many bytes (default 16 MiB). */
+  backpressureLimitBytes?: number;
 }
 
 // Stands up the ACP JSON-RPC transport (served on `/acp` by the central upgrade
@@ -52,8 +57,16 @@ export class AcpServer {
     const conn = new AcpConnection(duplex, agent);
     this.connections.add(conn);
 
+    // Liveness (ping/pong) + backpressure guard for this long-lived socket.
+    const monitor = new ConnectionMonitor(ws, {
+      intervalMs: this.opts.heartbeatMs,
+      backpressureLimitBytes: this.opts.backpressureLimitBytes,
+    });
+    ws.on('pong', () => monitor.notifyPong());
+    monitor.start();
+
     ws.on('message', (data) => conn.receive(data.toString()));
-    ws.on('close', () => { conn.close(); this.connections.delete(conn); });
-    ws.on('error', () => { conn.close(); this.connections.delete(conn); });
+    ws.on('close', () => { monitor.stop(); conn.close(); this.connections.delete(conn); });
+    ws.on('error', () => { monitor.stop(); conn.close(); this.connections.delete(conn); });
   }
 }
