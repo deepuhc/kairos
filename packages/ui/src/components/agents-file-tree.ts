@@ -502,6 +502,6 @@ export class AgentsFileTree extends LitElement {
       node.classList.add('md');
       return html`<div class="markdown-preview">${node}</div>`;
     }
-    return html`<pre class="code">${unsafeHTML(highlightCode(content, langFromPath(this.selectedPath)).value)}</pre>`;
+    return html`<pre class="code">${unsafeHTML(highlightCode(content, langFromPath(this.selectedPath ?? '')).value)}</pre>`;
   }
 }

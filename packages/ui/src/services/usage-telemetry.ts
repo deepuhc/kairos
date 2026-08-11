@@ -54,12 +54,12 @@ export function installUsageActivityTracking(
   };
 
   for (const event of ACTIVITY_EVENTS) {
-    doc?.addEventListener(event, mark, { passive: true, capture: true });
+    doc?.addEventListener?.(event, mark, { passive: true, capture: true });
   }
 
   return () => {
     for (const event of ACTIVITY_EVENTS) {
-      doc?.removeEventListener(event, mark, { capture: true });
+      doc?.removeEventListener?.(event, mark, { capture: true });
     }
   };
 }

@@ -1,4 +1,7 @@
-export function composeLaunchPreamble(_opts: { globalRules?: string; role?: string }): string {
+export function composeLaunchPreamble(_opts: {
+  globalRules?: string;
+  role?: { instructions?: string; outputFormat?: string };
+}): string {
   return '';
 }
 

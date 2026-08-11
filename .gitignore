@@ -8,3 +8,6 @@ coverage/
 *.log
 .DS_Store
 target/
+
+# Claude Code agent worktrees
+.claude/worktrees/

@@ -138,12 +138,13 @@ export class AgentsSourceControl extends LitElement {
   private groups(): ChangeGroup[] {
     const changes = this.status?.changes ?? [];
     const conflicted = changes.filter((c) => c.conflicted);
-    return [
+    const all: ChangeGroup[] = [
       { id: 'conflicted', title: 'Merge conflicts', changes: conflicted },
       { id: 'staged', title: 'Staged changes', changes: changes.filter((c) => c.staged && !c.conflicted) },
       { id: 'unstaged', title: 'Changes', changes: changes.filter((c) => c.unstaged && !c.untracked && !c.conflicted) },
       { id: 'untracked', title: 'Untracked files', changes: changes.filter((c) => c.untracked) },
-    ].filter((group) => group.changes.length > 0);
+    ];
+    return all.filter((group) => group.changes.length > 0);
   }
 
   private syncText() {

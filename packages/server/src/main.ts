@@ -53,8 +53,8 @@ app.get('/api/agents', (_req, res) => {
 
 app.get('/api/pipelines', (_req, res) => {
   const states = [...pipelines.entries()].map(([id, engine]) => ({
-    id,
     ...engine.getState(),
+    id,
     phases: Object.fromEntries(engine.getState().phases),
   }));
   res.json(states);
