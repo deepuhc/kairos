@@ -25,8 +25,21 @@ if (existsSync(uiDist)) {
 }
 
 // --- Services ---
-const registry = new ProviderRegistry();
+// Enable the in-memory mock provider when explicitly requested (KAIROS_MOCK) or
+// when no real provider credentials are present, so the app runs end-to-end
+// out of the box with deterministic, network-free responses.
+const hasRealProviderCreds = Boolean(
+  process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY,
+);
+const mockEnabled =
+  process.env.KAIROS_MOCK === '0' ? false
+  : process.env.KAIROS_MOCK === '1' ? true
+  : !hasRealProviderCreds;
+const registry = new ProviderRegistry({ mock: mockEnabled });
 const router = new SmartRouter(registry);
+if (mockEnabled) {
+  console.log('  [mock] MockProvider enabled — responses are simulated (set KAIROS_MOCK=0 with real API keys to disable)');
+}
 const pool = new AgentPool();
 const pipelines = new Map<string, PipelineEngine>();
 

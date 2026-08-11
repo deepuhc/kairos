@@ -4,6 +4,7 @@ import { AnthropicProvider } from './anthropic.js';
 import { OpenAIProvider } from './openai.js';
 import { GeminiProvider } from './gemini.js';
 import { CustomHttpProvider, type CustomHttpConfig } from './custom-http.js';
+import { MockProvider, type MockProviderConfig } from './mock.js';
 
 export interface RegistryConfig {
   ollama?: { baseUrl?: string };
@@ -11,12 +12,21 @@ export interface RegistryConfig {
   openai?: { apiKey?: string; baseUrl?: string };
   gemini?: { apiKey?: string; baseUrl?: string };
   custom?: CustomHttpConfig[];
+  /**
+   * Register the in-memory MockProvider so the app runs end-to-end with
+   * deterministic, network-free responses (no real model required). Pass `true`
+   * for defaults, or a config object to tune it.
+   */
+  mock?: boolean | MockProviderConfig;
 }
 
 export class ProviderRegistry {
   private providers: Provider[] = [];
 
   constructor(config?: RegistryConfig) {
+    if (config?.mock) {
+      this.providers.push(new MockProvider(config.mock === true ? undefined : config.mock));
+    }
     this.providers.push(new OllamaProvider(config?.ollama?.baseUrl));
     this.providers.push(new AnthropicProvider(config?.anthropic?.apiKey, config?.anthropic?.baseUrl));
     this.providers.push(new OpenAIProvider({
