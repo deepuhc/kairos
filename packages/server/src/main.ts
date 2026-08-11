@@ -19,6 +19,7 @@ import { resolveLaunchSpec, EXTERNAL_AGENT_IDS } from './acp/launch-spec.js';
 import { isOnPath } from './acp/which.js';
 import { EventBus } from './events/bus.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
+import { registerFileRoutes } from './rest/files-routes.js';
 import { buildAgentCatalog } from './rest/agent-catalog.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
@@ -104,6 +105,11 @@ app.get('/api/pipelines', (_req, res) => {
   }));
   res.json(states);
 });
+
+// Read-only workspace file browsing (Files tab, resume validation, @-mention
+// autocomplete). Mounted before the stubs so these real handlers win over the
+// 501 catch-all.
+registerFileRoutes(app);
 
 // Phase-C REST stubs: boot-critical GET defaults + a 501 { unsupported: true }
 // catch-all for every other /api route. Registered after the real /api routes
