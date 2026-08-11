@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { AgentPool } from '@kairos/agents';
-import { ProviderRegistry } from '@kairos/providers';
+import { ProviderRegistry, SmartRouter } from '@kairos/providers';
 import { PipelineEngine, parsePlan } from '@kairos/orchestrator';
 import type { PhaseDefinition, ExecutionContext } from '@kairos/orchestrator';
 import { WebSocketHub } from './ws/hub.js';
@@ -26,6 +26,7 @@ if (existsSync(uiDist)) {
 
 // --- Services ---
 const registry = new ProviderRegistry();
+const router = new SmartRouter(registry);
 const pool = new AgentPool();
 const pipelines = new Map<string, PipelineEngine>();
 
@@ -117,16 +118,12 @@ hub.onMessage(async (ws, msg: ClientMessage) => {
     case 'pipeline:start': {
       const definition = parsePlan(msg.plan, msg.name);
       const engine = new PipelineEngine(definition, {
-        async execute(phase: PhaseDefinition, context: ExecutionContext) {
-          // For now, use the provider directly for agent phases
-          const selection = await (await import('@kairos/providers')).SmartRouter.prototype.selectModel.call(
-            { registry, config: {} }, {}
-          );
-          if (!selection) throw new Error('No model available');
-
-          const result = await selection.provider.complete(
+        async execute(phase: PhaseDefinition, _context: ExecutionContext) {
+          // Route the phase through the shared SmartRouter instance (privacy →
+          // budget → preference → complexity selection) rather than reaching
+          // into a provider directly.
+          const result = await router.complete(
             [{ role: 'user', content: phase.prompt || `Execute task: ${phase.id}` }],
-            { model: selection.model.id }
           );
           return result.content;
         },
