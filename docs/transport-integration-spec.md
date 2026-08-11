@@ -1,6 +1,12 @@
 # Kairos UI ↔ Server Transport Integration Spec
 
-Status: DRAFT · Owner: software-architect · Date: 2026-08-10
+Status: IN PROGRESS · Owner: software-architect · Date: 2026-08-10
+
+> **Progress (2026-08-11):** Phases A–D implemented and verified.
+> - **A** — `@kairos/protocol` rewritten to the camelCase ACP contract + `acp-contract.test.ts`. ✅
+> - **B/D** — `/acp` transport stood up (`packages/server/src/acp/`) backed by `FakeAcpAgent`, including the bidirectional `session/request_permission` path; unit + real-socket integration tests. ✅
+> - **C** — REST triage stubs (`packages/server/src/rest/stub-routes.ts`): boot-critical GET defaults + `501 { unsupported: true }` catch-all. ✅
+> - **E** — real-agent adapters (shape B), `/events`, `/terminal/ws` — still open (per-tool, not headless-verifiable).
 
 ## Purpose
 
