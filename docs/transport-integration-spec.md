@@ -2,11 +2,19 @@
 
 Status: IN PROGRESS · Owner: software-architect · Date: 2026-08-10
 
-> **Progress (2026-08-11):** Phases A–D implemented and verified.
+> **Progress (2026-08-11):** Phases A–D implemented and verified; Phase E partially landed.
 > - **A** — `@kairos/protocol` rewritten to the camelCase ACP contract + `acp-contract.test.ts`. ✅
-> - **B/D** — `/acp` transport stood up (`packages/server/src/acp/`) backed by `FakeAcpAgent`, including the bidirectional `session/request_permission` path; unit + real-socket integration tests. ✅
-> - **C** — REST triage stubs (`packages/server/src/rest/stub-routes.ts`): boot-critical GET defaults + `501 { unsupported: true }` catch-all. ✅
-> - **E** — real-agent adapters (shape B), `/events`, `/terminal/ws` — still open (per-tool, not headless-verifiable).
+> - **B/D** — `/acp` transport stood up (`packages/server/src/acp/`), now backed by a real
+>   `ProviderAcpAgent` that drives prompts through the shared `SmartRouter` (registry → router →
+>   provider → `session/update`); with the mock provider it runs offline. Includes the bidirectional
+>   `session/request_permission` path; unit + real-socket integration tests, plus a UI-client-interop
+>   test driving the *shipped* `AcpClient`/`WsJsonRpc` against the real server (caught + fixed the
+>   newline-framing seam bug). ✅
+> - **C** — REST triage stubs (`packages/server/src/rest/stub-routes.ts`): boot-critical GET defaults +
+>   `501 { unsupported: true }` catch-all; `/api/agents` returns a real selectable catalog. ✅
+> - **E (partial)** — `/events` fan-out bus opened server-side (`packages/server/src/events/bus.ts`),
+>   wired into the central upgrade router; real-socket integration test + live smoke. ✅
+>   Still open (per-tool, not headless-verifiable per §4): real-CLI shape-B adapters, `/terminal/ws` PTY.
 
 ## Purpose
 
