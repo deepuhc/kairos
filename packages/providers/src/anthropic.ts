@@ -171,6 +171,11 @@ export class AnthropicProvider implements Provider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    // input_tokens arrives once in the message_start event; output_tokens
+    // arrives in message_delta. Carry the input count forward so the final
+    // usage chunk reports both (a streamed turn otherwise loses input tokens,
+    // skewing every downstream total + cost calculation).
+    let inputTokens = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -190,10 +195,12 @@ export class AnthropicProvider implements Provider {
             delta?: { type: string; text?: string };
             content_block?: { type: string };
             message?: { usage?: { input_tokens: number; output_tokens: number } };
-            usage?: { output_tokens: number };
+            usage?: { input_tokens?: number; output_tokens: number };
           };
 
-          if (event.type === 'content_block_delta') {
+          if (event.type === 'message_start') {
+            inputTokens = event.message?.usage?.input_tokens ?? 0;
+          } else if (event.type === 'content_block_delta') {
             if (event.delta?.type === 'text_delta' && event.delta?.text) {
               yield { type: 'text', text: event.delta.text };
             } else if (event.delta?.type === 'thinking_delta' && event.delta?.text) {
@@ -201,12 +208,12 @@ export class AnthropicProvider implements Provider {
             }
           } else if (event.type === 'message_delta' && event.usage) {
             const modelInfo = MODELS.find((m) => m.id === model);
-            yield {
-              type: 'usage',
-              inputTokens: 0,
-              outputTokens: event.usage.output_tokens,
-              totalCostUsd: modelInfo ? (event.usage.output_tokens * (modelInfo.costPerMillionOutput || 0)) / 1_000_000 : undefined,
-            };
+            const outputTokens = event.usage.output_tokens;
+            const costUsd = modelInfo
+              ? (inputTokens * (modelInfo.costPerMillionInput || 0) +
+                 outputTokens * (modelInfo.costPerMillionOutput || 0)) / 1_000_000
+              : undefined;
+            yield { type: 'usage', inputTokens, outputTokens, totalCostUsd: costUsd };
           }
         } catch {
           // skip malformed

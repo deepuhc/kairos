@@ -11,15 +11,43 @@ export interface AgentOption {
   custom?: boolean;
 }
 
+// Human labels for the built-in providers. Unknown provider names fall back to
+// a Title-cased id so a newly added provider still shows something sensible.
+const PROVIDER_LABELS: Record<string, string> = {
+  mock: 'Mock Agent',
+  anthropic: 'Claude (Anthropic)',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  ollama: 'Ollama (local)',
+};
+
+function labelFor(id: string): string {
+  return PROVIDER_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+export interface AgentCatalogInput {
+  /** Whether the in-memory mock provider is active. */
+  mockEnabled: boolean;
+  /**
+   * Names of providers currently available (from registry.discoverAvailable()).
+   * Each becomes a connectable /acp agent so the UI picker offers real backends
+   * — without this the picker is empty whenever the mock is off, even though the
+   * router would happily serve a real provider.
+   */
+  providers?: string[];
+}
+
 /**
- * Build the selectable agent list. With the mock provider active we expose a
- * "mock" agent so the Agents tab works end-to-end with no real CLI installed.
- * When real providers are wired (Phase E) their agents are appended here.
+ * Build the selectable agent list. Every available provider (plus the mock when
+ * active) becomes a connectable agent; connecting any of them on /acp runs the
+ * shared router → provider → session/update path. De-duplicates by id so a
+ * provider isn't listed twice when it's both available and the mock.
  */
-export function buildAgentCatalog(opts: { mockEnabled: boolean }): AgentOption[] {
-  const agents: AgentOption[] = [];
-  if (opts.mockEnabled) {
-    agents.push({ id: 'mock', label: 'Mock Agent', managedApp: false, installed: true });
+export function buildAgentCatalog(input: AgentCatalogInput): AgentOption[] {
+  const ids: string[] = [];
+  if (input.mockEnabled) ids.push('mock');
+  for (const name of input.providers ?? []) {
+    if (!ids.includes(name)) ids.push(name);
   }
-  return agents;
+  return ids.map((id) => ({ id, label: labelFor(id), managedApp: false, installed: true }));
 }

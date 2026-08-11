@@ -71,8 +71,13 @@ app.get('/api/providers', async (_req, res) => {
 // connected on /acp, where ProviderAcpAgent serves it through the router. When
 // the mock provider is active we expose a "mock" agent so the Agents tab works
 // end-to-end with no real CLI installed.
-app.get('/api/agents', (_req, res) => {
-  res.json({ agents: buildAgentCatalog({ mockEnabled }) });
+app.get('/api/agents', async (_req, res) => {
+  // Every available provider (plus the mock when active) is a connectable /acp
+  // agent. Without this the picker is empty whenever the mock is off, even
+  // though the router would serve a real provider on /acp.
+  const available = await registry.discoverAvailable();
+  const providers = available.map((p) => p.name);
+  res.json({ agents: buildAgentCatalog({ mockEnabled, providers }) });
 });
 
 // Running agent processes (distinct from the selectable catalog above).

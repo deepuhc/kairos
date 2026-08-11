@@ -229,6 +229,7 @@ describe('AnthropicProvider', () => {
   describe('streamChunks', () => {
     it('yields text and thinking chunks', async () => {
       const events = [
+        'data: {"type":"message_start","message":{"usage":{"input_tokens":42,"output_tokens":0}}}',
         'data: {"type":"content_block_start","content_block":{"type":"thinking"}}',
         'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","text":"hmm"}}',
         'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}',
@@ -262,7 +263,12 @@ describe('AnthropicProvider', () => {
       expect(chunks[0]).toEqual({ type: 'thinking', text: 'hmm' });
       expect(chunks[1]).toEqual({ type: 'text', text: 'Hi' });
       expect(chunks[2]).toEqual({ type: 'text', text: '!' });
-      expect(chunks[3]).toMatchObject({ type: 'usage', outputTokens: 10 });
+      // input_tokens from message_start must survive into the final usage chunk,
+      // and cost must reflect BOTH input and output (not output-only).
+      expect(chunks[3]).toMatchObject({ type: 'usage', inputTokens: 42, outputTokens: 10 });
+      const usage = chunks[3] as Extract<import('../types.js').StreamChunk, { type: 'usage' }>;
+      // opus-4-8 default: 42*5/1e6 + 10*25/1e6 = 0.00021 + 0.00025 = 0.00046
+      expect(usage.totalCostUsd).toBeCloseTo(0.00046, 8);
     });
 
     it('yields error on failed request', async () => {
