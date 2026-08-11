@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { ChildIo } from './stdio-bridge.js';
 import type { LaunchSpec } from './launch-spec.js';
+import { expandHome } from './paths.js';
 
 // A ChildIo backed by a real spawned subprocess. Bridges the process's
 // stdin/stdout/stderr to the StdioAcpAgent proxy. The child speaks newline-
@@ -12,7 +13,7 @@ export class ChildProcessIo implements ChildIo {
 
   constructor(spec: LaunchSpec, cwd: string) {
     this.proc = spawn(spec.command, spec.args, {
-      cwd,
+      cwd: expandHome(cwd),
       env: { ...process.env, ...spec.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     });

@@ -59,6 +59,15 @@ describe('StdioAcpAgent (stdio ↔ client proxy)', () => {
     await expect(pending).resolves.toEqual({ protocolVersion: 1 });
   });
 
+  it('expands a ~ cwd in forwarded request params (adapters require an absolute cwd)', async () => {
+    const { homedir } = await import('node:os');
+    const child = new FakeChild();
+    const agent = new StdioAcpAgent(child);
+    const { peer } = recordingPeer();
+    agent.handleRequest(Methods.SESSION_NEW, { cwd: '~', mcpServers: [] }, peer);
+    expect(child.lastWrite().params).toMatchObject({ cwd: homedir() });
+  });
+
   it('forwards client notifications to the child stdin', () => {
     const child = new FakeChild();
     const agent = new StdioAcpAgent(child);

@@ -1,6 +1,7 @@
 import { JsonRpcCodec } from '@kairos/protocol';
 import { Methods } from '@kairos/protocol';
 import type { AcpAgent, Peer } from './peer.js';
+import { normalizeParamsCwd } from './paths.js';
 
 // A real ACP agent that runs as a child process speaking JSON-RPC over stdio —
 // e.g. Claude Code via `@agentclientprotocol/claude-agent-acp`. This is a
@@ -50,7 +51,10 @@ export class StdioAcpAgent implements AcpAgent {
   async handleRequest(method: string, params: Record<string, unknown>, peer: Peer): Promise<unknown> {
     this.peer = peer;
     if (this.closed) throw new Error('agent process has exited');
-    const { id, payload } = this.codec.encode(method, params);
+    // The browser sends a raw cwd of "~" (see ui getDefaultCwd) and relies on
+    // the backend to resolve it; adapters reject a non-absolute cwd. Normalize
+    // it in the params we forward (session/new, session/load).
+    const { id, payload } = this.codec.encode(method, normalizeParamsCwd(params));
     const pending = this.codec.registerPending(id);
     this.io.write(payload);
     return pending;
@@ -59,7 +63,7 @@ export class StdioAcpAgent implements AcpAgent {
   handleNotification(method: string, params: Record<string, unknown>, peer: Peer): void {
     this.peer = peer;
     if (this.closed) return;
-    this.io.write(this.codec.encodeNotification(method, params));
+    this.io.write(this.codec.encodeNotification(method, normalizeParamsCwd(params)));
   }
 
   close(): void {
