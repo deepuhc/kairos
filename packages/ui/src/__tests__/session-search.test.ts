@@ -118,7 +118,7 @@ describe('buildSessionSearchPrompt', () => {
 
   it('tells the agent how to read transcripts and what to output', () => {
     const p = buildSessionSearchPrompt('q', list);
-    expect(p).toContain('devai sessions export');
+    expect(p).toContain('kairos sessions export');
     expect(p).toContain('--format md');
   });
 

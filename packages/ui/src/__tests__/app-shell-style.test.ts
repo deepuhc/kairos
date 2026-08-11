@@ -51,9 +51,9 @@ describe('app shell styles', () => {
   });
 
   it('keeps the header logo tile transparent so it blends with the toolbar', () => {
-    expect(cssRule('.logo-mark .tile')).toContain('fill: transparent');
-    expect(cssRule('.logo-mark .tile-glow')).toContain('opacity: 0');
-    expect(cssRule('.logo-mark .tile-border')).toContain('opacity: 0');
+    // The logo is now a Kalimba SVG; verify accent-coloured tines and transparent fill
+    expect(cssRule('.logo-mark .tine')).toContain('stroke: var(--accent)');
+    expect(cssRule('.logo-mark .sound-hole')).toContain('fill: var(--accent)');
   });
 
   it('scopes native titlebar chrome to Tauri desktop shells', () => {
@@ -82,8 +82,8 @@ describe('app shell styles', () => {
     expect(nativeHeader).not.toContain('-webkit-backdrop-filter');
 
     const nativeNav = cssRule(':host([tauri-native-titlebar]) nav');
-    expect(nativeNav).toContain('border: 1px solid transparent');
-    expect(nativeNav).toContain('background: transparent');
+    expect(nativeNav).toContain('background: var(--w4)');
+    expect(nativeNav).toContain('border-radius: 100px');
   });
 
   it('keeps header controls visually quiet until interaction', () => {
@@ -92,11 +92,11 @@ describe('app shell styles', () => {
     expect(host).toContain('--header-control-border: transparent');
 
     const activeNav = cssRule('nav button[active]');
-    expect(activeNav).toContain('background: transparent');
+    expect(activeNav).toContain('background: var(--accent-a18)');
     expect(activeNav).toContain('color: var(--accent)');
 
     const activeNavUnderline = cssRule('nav button[active]::after');
-    expect(activeNavUnderline).toContain('height: 3px');
+    expect(activeNavUnderline).toContain('display: none');
 
     const toggle = cssRule('.theme-toggle');
     expect(toggle).toContain('border: 1px solid var(--header-control-border)');
