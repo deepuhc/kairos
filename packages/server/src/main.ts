@@ -12,6 +12,7 @@ import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
 import { AcpServer } from './acp/server.js';
 import { FakeAcpAgent } from './acp/fake-agent.js';
+import { registerStubRoutes } from './rest/stub-routes.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,11 @@ app.get('/api/pipelines', (_req, res) => {
   }));
   res.json(states);
 });
+
+// Phase-C REST stubs: boot-critical GET defaults + a 501 { unsupported: true }
+// catch-all for every other /api route. Registered after the real /api routes
+// so real handlers win, and before the SPA fallback so it only catches /api.
+registerStubRoutes(app);
 
 // SPA fallback
 app.get('*', (req, res, next) => {
