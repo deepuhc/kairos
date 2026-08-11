@@ -12,6 +12,7 @@ import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
 import { AcpServer } from './acp/server.js';
 import { ProviderAcpAgent } from './acp/provider-agent.js';
+import { SessionStore } from './acp/session-store.js';
 import { EventBus } from './events/bus.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
 import { buildAgentCatalog } from './rest/agent-catalog.js';
@@ -113,8 +114,11 @@ const hub = new WebSocketHub();
 // UI's Agents tab runs the full registry → router → provider → session/update
 // path. With the mock provider enabled (no real creds) the replies are
 // deterministic and network-free; wiring a real provider needs no change here.
+// One session store shared by every per-connection agent, so session/load
+// (resume) recovers real history and session ids stay unique process-wide.
+const sessions = new SessionStore();
 const acpServer = new AcpServer({
-  createAgent: () => new ProviderAcpAgent({ router }),
+  createAgent: () => new ProviderAcpAgent({ router, sessions }),
 });
 
 // The `/events` fan-out bus — a plain one-way {event,data} publish stream the

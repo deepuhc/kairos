@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Methods, type SessionPromptResult, type SessionUpdateParams } from '@kairos/protocol';
 import { ProviderRegistry, SmartRouter, MockProvider } from '@kairos/providers';
 import { ProviderAcpAgent } from '../provider-agent.js';
+import { SessionStore } from '../session-store.js';
 import type { Peer } from '../peer.js';
 
 // An in-memory Peer that records outbound notifications and auto-answers any
@@ -115,6 +116,59 @@ describe('ProviderAcpAgent', () => {
     agent.handleNotification(Methods.SESSION_CANCEL, { sessionId }, peer);
     const result = await done;
     expect(result.stopReason).toBe('cancelled');
+  });
+
+  it('resumes history across connections via a shared SessionStore', async () => {
+    // AcpServer builds a fresh agent per WebSocket. Simulate two connections
+    // sharing one store: the first has a turn, the second resumes and prompts.
+    const router = mockRouter();
+    const sessions = new SessionStore();
+
+    const first = new ProviderAcpAgent({ router, sessions });
+    const p1 = recordingPeer();
+    const sessionId = await newSession(first, p1.peer);
+    await first.handleRequest(
+      Methods.SESSION_PROMPT,
+      { sessionId, prompt: [{ type: 'text', text: 'remember this' }] },
+      p1.peer,
+    );
+
+    // New connection → new agent, same store. Resume the prior session.
+    const second = new ProviderAcpAgent({ router, sessions });
+    const p2 = recordingPeer();
+    const loaded = await second.handleRequest(Methods.SESSION_LOAD, { sessionId, cwd: '/repo', mcpServers: [] }, p2.peer);
+    expect(loaded).toMatchObject({ sessionId });
+
+    // History from connection 1 (2 messages) must be present, so this turn's
+    // input token count exceeds a cold single-message turn.
+    const resumed = (await second.handleRequest(
+      Methods.SESSION_PROMPT,
+      { sessionId, prompt: [{ type: 'text', text: 'x' }] },
+      p2.peer,
+    )) as SessionPromptResult;
+    expect(resumed.stopReason).toBe('end_turn');
+
+    const cold = new ProviderAcpAgent({ router, sessions });
+    const p3 = recordingPeer();
+    const coldSession = await newSession(cold, p3.peer);
+    const coldTurn = (await cold.handleRequest(
+      Methods.SESSION_PROMPT,
+      { sessionId: coldSession, prompt: [{ type: 'text', text: 'x' }] },
+      p3.peer,
+    )) as SessionPromptResult;
+
+    expect(resumed.usage?.inputTokens ?? 0).toBeGreaterThan(coldTurn.usage?.inputTokens ?? 0);
+  });
+
+  it('mints unique session ids across two agents sharing a store', async () => {
+    const sessions = new SessionStore();
+    const router = mockRouter();
+    const a = new ProviderAcpAgent({ router, sessions });
+    const b = new ProviderAcpAgent({ router, sessions });
+    const { peer } = recordingPeer();
+    const idA = await newSession(a, peer);
+    const idB = await newSession(b, peer);
+    expect(idA).not.toBe(idB);
   });
 
   it('reports an error stopReason when no models are available', async () => {

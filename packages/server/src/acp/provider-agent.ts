@@ -6,14 +6,22 @@ import {
   type SessionPromptResult,
   type SessionUpdateParams,
 } from '@kairos/protocol';
-import type { SmartRouter, Message } from '@kairos/providers';
+import type { SmartRouter } from '@kairos/providers';
 import type { AcpAgent, Peer } from './peer.js';
+import { SessionStore } from './session-store.js';
 
 export interface ProviderAcpAgentOptions {
   /** The shared router that selects a provider/model and streams the reply. */
   router: SmartRouter;
   /** Enable extended/adaptive thinking, surfaced as agent_thought_chunk frames. */
   thinking?: boolean;
+  /**
+   * Session state shared across connections. AcpServer builds a fresh agent per
+   * WebSocket, so this must be shared for session/load (resume) to work and for
+   * session ids to stay unique process-wide. Defaults to a private store when
+   * omitted (single-connection/test use).
+   */
+  sessions?: SessionStore;
 }
 
 // A real ACP agent backed by the provider layer. Where FakeAcpAgent just echoes,
@@ -24,13 +32,15 @@ export interface ProviderAcpAgentOptions {
 // initialize → session/new → session/prompt (streams the provider's chunks as
 // session/update frames, honoring session/cancel) → returns a stopReason + usage.
 export class ProviderAcpAgent implements AcpAgent {
-  private seq = 0;
-  // Per-session conversation history so multi-turn prompts have context.
-  private history = new Map<string, Message[]>();
+  // Session history + id generation live in a store shared across connections,
+  // so session/load resumes real context and ids stay unique process-wide.
+  private readonly sessions: SessionStore;
   // Sessions with a pending cancel; the streaming loop checks and bails out.
   private cancelled = new Set<string>();
 
-  constructor(private opts: ProviderAcpAgentOptions) {}
+  constructor(private opts: ProviderAcpAgentOptions) {
+    this.sessions = opts.sessions ?? new SessionStore();
+  }
 
   async handleRequest(method: string, params: Record<string, unknown>, peer: Peer): Promise<unknown> {
     switch (method) {
@@ -70,15 +80,14 @@ export class ProviderAcpAgent implements AcpAgent {
   }
 
   private sessionNew(): SessionNewResult {
-    const sessionId = `sess-${++this.seq}`;
-    this.history.set(sessionId, []);
+    const { sessionId } = this.sessions.create();
     return { sessionId, configOptions: [] };
   }
 
   private sessionLoad(params: { sessionId?: string }): SessionNewResult | null {
     const sessionId = params.sessionId;
     if (!sessionId) return null;
-    if (!this.history.has(sessionId)) this.history.set(sessionId, []);
+    this.sessions.load(sessionId); // ensure it exists / resume its history
     return { sessionId, configOptions: [] };
   }
 
@@ -91,7 +100,7 @@ export class ProviderAcpAgent implements AcpAgent {
       .join(' ')
       .trim();
 
-    const messages = this.history.get(sessionId) ?? [];
+    const messages = this.sessions.get(sessionId) ?? this.sessions.load(sessionId);
     messages.push({ role: 'user', content: text });
 
     const controller = new AbortController();
@@ -107,7 +116,7 @@ export class ProviderAcpAgent implements AcpAgent {
       for await (const chunk of stream) {
         if (this.cancelled.has(sessionId)) {
           controller.abort();
-          this.history.set(sessionId, messages); // keep the user turn
+          this.sessions.set(sessionId, messages); // keep the user turn
           return { stopReason: 'cancelled' };
         }
         switch (chunk.type) {
@@ -128,7 +137,7 @@ export class ProviderAcpAgent implements AcpAgent {
           case 'error':
             this.emit(peer, sessionId, 'agent_message_chunk', `\n[error] ${chunk.message}`);
             messages.push({ role: 'assistant', content: assistant });
-            this.history.set(sessionId, messages);
+            this.sessions.set(sessionId, messages);
             return { stopReason: 'error' };
         }
       }
@@ -139,7 +148,7 @@ export class ProviderAcpAgent implements AcpAgent {
     }
 
     messages.push({ role: 'assistant', content: assistant });
-    this.history.set(sessionId, messages);
+    this.sessions.set(sessionId, messages);
     return { stopReason: 'end_turn', usage };
   }
 
