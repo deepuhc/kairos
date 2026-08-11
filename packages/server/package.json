@@ -18,6 +18,7 @@
     "cors": "^2.8.5"
   },
   "devDependencies": {
+    "@kairos/ui": "*",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
     "@types/cors": "^2.8.0",

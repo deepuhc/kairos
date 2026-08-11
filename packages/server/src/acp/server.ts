@@ -65,7 +65,14 @@ export class AcpServer {
     ws.on('pong', () => monitor.notifyPong());
     monitor.start();
 
-    ws.on('message', (data) => conn.receive(data.toString()));
+    // A WebSocket delivers discrete message frames, but AcpConnection feeds a
+    // newline-framed JsonRpcCodec (built for stdio streams). Vanilla ACP clients
+    // — including the shipped browser client (ui/services/acp-ws.ts) — send one
+    // JSON object per frame with NO trailing newline, which the codec would
+    // otherwise buffer forever. Terminate each frame here so message-framed
+    // transports and stream-framed ones both decode. (A frame that already ends
+    // in "\n" just yields a harmless empty trailing line.)
+    ws.on('message', (data) => conn.receive(data.toString() + '\n'));
     ws.on('close', () => { monitor.stop(); conn.close(); this.connections.delete(conn); });
     ws.on('error', () => { monitor.stop(); conn.close(); this.connections.delete(conn); });
   }

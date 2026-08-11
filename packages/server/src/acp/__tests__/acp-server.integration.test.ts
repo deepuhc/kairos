@@ -96,6 +96,24 @@ describe('AcpServer over a real WebSocket', () => {
     ws.close();
   });
 
+  it('decodes a frame sent WITHOUT a trailing newline (vanilla ACP client)', async () => {
+    // The shipped browser client (ui/services/acp-ws.ts) and any vanilla ACP
+    // peer send one JSON object per WS frame with NO trailing "\n". The server
+    // must still decode it — regression guard for the WS→codec framing seam.
+    const { port } = await boot();
+    const ws = await connect(`ws://localhost:${port}/acp?agent=test&cwd=/tmp`);
+    const reply = await new Promise<{ id: number; result?: { protocolVersion?: number } }>((resolve, reject) => {
+      ws.on('message', (data) => resolve(JSON.parse(data.toString())));
+      ws.on('error', reject);
+      // Raw frame, deliberately no newline appended.
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: Methods.INITIALIZE, params: { protocolVersion: 1 } }));
+      setTimeout(() => reject(new Error('no response — frame was buffered, not decoded')), 2000);
+    });
+    expect(reply.id).toBe(1);
+    expect(reply.result?.protocolVersion).toBe(1);
+    ws.close();
+  });
+
   it('rejects an /acp upgrade with no ?agent= param', async () => {
     const { port } = await boot();
     const closeInfo = await new Promise<{ code: number }>((resolve, reject) => {
