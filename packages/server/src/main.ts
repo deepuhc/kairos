@@ -12,6 +12,7 @@ import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
 import { AcpServer } from './acp/server.js';
 import { ProviderAcpAgent } from './acp/provider-agent.js';
+import { EventBus } from './events/bus.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
 import { buildAgentCatalog } from './rest/agent-catalog.js';
 
@@ -116,6 +117,12 @@ const acpServer = new AcpServer({
   createAgent: () => new ProviderAcpAgent({ router }),
 });
 
+// The `/events` fan-out bus — a plain one-way {event,data} publish stream the
+// UI's EventSocket consumes (auth:changed, output:<id>, done:<id>, …). Without
+// a server-side endpoint the shipped UI would reconnect-loop this socket every
+// second forever. Publish-only; see events/bus.ts.
+const eventBus = new EventBus();
+
 // Central upgrade router: dispatch by path so /ws (hub) and /acp (ACP) coexist
 // on one http.Server. A noServer WSS per path — a path-bound WSS would destroy
 // the other's upgrades with a 400.
@@ -125,6 +132,8 @@ server.on('upgrade', (req, socket, head) => {
     hub.handleUpgrade(req, socket, head);
   } else if (pathname === '/acp') {
     acpServer.handleUpgrade(req, socket, head);
+  } else if (pathname === '/events') {
+    eventBus.handleUpgrade(req, socket, head);
   } else {
     socket.destroy();
   }
