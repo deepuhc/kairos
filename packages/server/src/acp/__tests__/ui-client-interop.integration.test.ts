@@ -4,6 +4,7 @@ import { AddressInfo } from 'node:net';
 import { ProviderRegistry, SmartRouter } from '@kairos/providers';
 import { AcpServer } from '../server.js';
 import { ProviderAcpAgent } from '../provider-agent.js';
+import { SessionStore } from '../session-store.js';
 import { FakeAcpAgent } from '../fake-agent.js';
 import type { AcpAgent } from '../peer.js';
 // The SHIPPED UI client — same file the browser bundles. Driving the real
@@ -96,6 +97,44 @@ describe('shipped UI client (WsJsonRpc) ↔ real ACP server', () => {
     expect(asked).toBe(true); // server originated the request; client answered
     expect(result.stopReason).toBe('end_turn'); // allow → turn completes
     rpc.close();
+  });
+
+  it('resumes a session over a fresh socket via session/load (shared store)', async () => {
+    // Wire a shared SessionStore exactly as main.ts does, so a NEW connection
+    // (new per-socket agent) resumes the prior session's history rather than
+    // landing on an empty agent. This is the end-to-end proof of the resume fix.
+    const router = mockRouter();
+    const sessions = new SessionStore();
+    const port = await boot(() => new ProviderAcpAgent({ router, sessions }));
+
+    // Connection 1: new session + one turn.
+    const c1 = new WsJsonRpc(`ws://localhost:${port}/acp?agent=mock&cwd=/tmp`);
+    await new Promise<void>((resolve, reject) => { c1.onOpen = resolve; c1.onSocketError = reject; });
+    await c1.request('initialize', { protocolVersion: 1 });
+    const { sessionId } = await c1.request<{ sessionId: string }>('session/new', { cwd: '/tmp', mcpServers: [] });
+    await c1.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'remember this fact' }] });
+    c1.close();
+
+    // Connection 2: a brand-new socket → a brand-new agent → resume + prompt.
+    const c2 = new WsJsonRpc(`ws://localhost:${port}/acp?agent=mock&cwd=/tmp`);
+    await new Promise<void>((resolve, reject) => { c2.onOpen = resolve; c2.onSocketError = reject; });
+    const loaded = await c2.request('session/load', { sessionId, cwd: '/tmp', mcpServers: [] });
+    expect(loaded).toMatchObject({ sessionId });
+    const resumed = await c2.request<{ stopReason: string; usage?: { inputTokens?: number } }>('session/prompt', {
+      sessionId,
+      prompt: [{ type: 'text', text: 'x' }],
+    });
+    expect(resumed.stopReason).toBe('end_turn');
+
+    // A cold session on the same shared store: the resumed turn carried more
+    // input tokens because its history from connection 1 came along.
+    const coldNew = await c2.request<{ sessionId: string }>('session/new', { cwd: '/tmp', mcpServers: [] });
+    const cold = await c2.request<{ usage?: { inputTokens?: number } }>('session/prompt', {
+      sessionId: coldNew.sessionId,
+      prompt: [{ type: 'text', text: 'x' }],
+    });
+    expect(resumed.usage?.inputTokens ?? 0).toBeGreaterThan(cold.usage?.inputTokens ?? 0);
+    c2.close();
   });
 
   it('surfaces the 4400 close when ?agent= is missing', async () => {
