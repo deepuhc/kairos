@@ -13,6 +13,7 @@ import type { ClientMessage } from './ws/protocol.js';
 import { AcpServer } from './acp/server.js';
 import { ProviderAcpAgent } from './acp/provider-agent.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
+import { buildAgentCatalog } from './rest/agent-catalog.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,7 +64,17 @@ app.get('/api/providers', async (_req, res) => {
   res.json(results);
 });
 
+// The UI's agent picker (getAgents → AgentOption[]) needs the *selectable*
+// agent catalog, not the list of running processes. Any agent id here can be
+// connected on /acp, where ProviderAcpAgent serves it through the router. When
+// the mock provider is active we expose a "mock" agent so the Agents tab works
+// end-to-end with no real CLI installed.
 app.get('/api/agents', (_req, res) => {
+  res.json({ agents: buildAgentCatalog({ mockEnabled }) });
+});
+
+// Running agent processes (distinct from the selectable catalog above).
+app.get('/api/agents/running', (_req, res) => {
   res.json(pool.list());
 });
 
