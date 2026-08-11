@@ -1,4 +1,4 @@
-import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult } from './types.js';
+import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult, StreamChunk } from './types.js';
 import type { ProviderRegistry } from './registry.js';
 
 export interface RouterConfig {
@@ -80,5 +80,25 @@ export class SmartRouter {
     if (!selection) throw new Error('No available models');
 
     yield* selection.provider.stream(messages, { ...options, model: options?.model || selection.model.id });
+  }
+
+  /**
+   * Typed-chunk streaming (thinking / text / tool calls / usage). Selects a
+   * provider/model like {@link stream}, then delegates to the provider's
+   * `streamChunks` when it has one, otherwise adapts its string `stream` into
+   * text chunks so callers get a uniform `StreamChunk` stream either way.
+   */
+  async *streamChunks(messages: Message[], options?: CompletionOptions & { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): AsyncIterable<StreamChunk> {
+    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal });
+    if (!selection) throw new Error('No available models');
+
+    const opts = { ...options, model: options?.model || selection.model.id };
+    if (selection.provider.streamChunks) {
+      yield* selection.provider.streamChunks(messages, opts);
+    } else {
+      for await (const text of selection.provider.stream(messages, opts)) {
+        yield { type: 'text', text };
+      }
+    }
   }
 }

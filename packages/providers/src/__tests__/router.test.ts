@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SmartRouter } from '../router.js';
 import { ProviderRegistry } from '../registry.js';
-import type { ModelInfo } from '../types.js';
+import type { ModelInfo, StreamChunk } from '../types.js';
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
@@ -185,6 +185,64 @@ describe('SmartRouter', () => {
         texts.push(text);
       }
       expect(texts).toContain('streamed');
+    });
+  });
+
+  describe('streamChunks', () => {
+    // Build a mock-only router so chunk shapes are deterministic and offline.
+    function mockOnlyRouter(): SmartRouter {
+      const reg = new ProviderRegistry({ mock: true, discoveryTtlMs: 0 });
+      for (const p of [...reg.all]) if (p.name !== 'mock') reg.removeProvider(p.name);
+      return new SmartRouter(reg);
+    }
+
+    it('yields typed chunks (text + usage) from a provider that implements streamChunks', async () => {
+      const chunks: StreamChunk[] = [];
+      for await (const c of mockOnlyRouter().streamChunks([{ role: 'user', content: 'hi there' }])) {
+        chunks.push(c);
+      }
+      expect(chunks.some((c) => c.type === 'text')).toBe(true);
+      expect(chunks.some((c) => c.type === 'usage')).toBe(true);
+    });
+
+    it('surfaces thinking chunks when thinking is enabled', async () => {
+      const chunks: StreamChunk[] = [];
+      for await (const c of mockOnlyRouter().streamChunks([{ role: 'user', content: 'ponder' }], { thinking: true })) {
+        chunks.push(c);
+      }
+      expect(chunks.some((c) => c.type === 'thinking')).toBe(true);
+    });
+
+    it('adapts a provider without streamChunks into text chunks', async () => {
+      // A provider that only implements the legacy string `stream`.
+      const reg = new ProviderRegistry({ discoveryTtlMs: 0 });
+      for (const p of [...reg.all]) reg.removeProvider(p.name);
+      reg.addProvider({
+        name: 'legacy',
+        isLocal: true,
+        isAvailable: async () => true,
+        listModels: async (): Promise<ModelInfo[]> => [
+          { id: 'legacy-1', name: 'Legacy', provider: 'legacy', isLocal: true, capabilities: ['chat'] },
+        ],
+        complete: async () => ({ content: 'x', model: 'legacy-1' }),
+        stream: async function* () { yield 'alpha'; yield 'beta'; },
+        // no streamChunks
+      });
+      const chunks: StreamChunk[] = [];
+      for await (const c of new SmartRouter(reg).streamChunks([{ role: 'user', content: 'hi' }])) {
+        chunks.push(c);
+      }
+      const text = chunks.filter((c): c is Extract<StreamChunk, { type: 'text' }> => c.type === 'text').map((c) => c.text).join('');
+      expect(text).toBe('alphabeta');
+    });
+
+    it('throws when no models are available', async () => {
+      const reg = new ProviderRegistry({ discoveryTtlMs: 0 });
+      for (const p of [...reg.all]) reg.removeProvider(p.name);
+      const emptyRouter = new SmartRouter(reg);
+      await expect(async () => {
+        for await (const _ of emptyRouter.streamChunks([{ role: 'user', content: 'hi' }])) void _;
+      }).rejects.toThrow('No available models');
     });
   });
 });

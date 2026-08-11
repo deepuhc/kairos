@@ -11,7 +11,7 @@ import type { PhaseDefinition, ExecutionContext } from '@kairos/orchestrator';
 import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
 import { AcpServer } from './acp/server.js';
-import { FakeAcpAgent } from './acp/fake-agent.js';
+import { ProviderAcpAgent } from './acp/provider-agent.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
@@ -96,12 +96,13 @@ app.get('*', (req, res, next) => {
 const server = createServer(app);
 const hub = new WebSocketHub();
 
-// ACP JSON-RPC transport on /acp. Until real ACP agent binaries are wired
-// (transport-integration-spec §5 Phase E), every connection is served by an
-// in-memory FakeAcpAgent so the UI's Agents tab works end-to-end. The mock
-// permission flow is enabled so the bidirectional path is exercised.
+// ACP JSON-RPC transport on /acp. Every connection is served by a
+// ProviderAcpAgent that drives prompts through the shared SmartRouter, so the
+// UI's Agents tab runs the full registry → router → provider → session/update
+// path. With the mock provider enabled (no real creds) the replies are
+// deterministic and network-free; wiring a real provider needs no change here.
 const acpServer = new AcpServer({
-  createAgent: () => new FakeAcpAgent({ chunkDelayMs: 15 }),
+  createAgent: () => new ProviderAcpAgent({ router }),
 });
 
 // Central upgrade router: dispatch by path so /ws (hub) and /acp (ACP) coexist
