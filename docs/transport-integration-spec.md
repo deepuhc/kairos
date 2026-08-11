@@ -14,6 +14,11 @@ Status: IN PROGRESS · Owner: software-architect · Date: 2026-08-10
 >   `501 { unsupported: true }` catch-all; `/api/agents` returns a real selectable catalog. ✅
 > - **E (partial)** — `/events` fan-out bus opened server-side (`packages/server/src/events/bus.ts`),
 >   wired into the central upgrade router; real-socket integration test + live smoke. ✅
+>   Real provider (Anthropic) proven end-to-end over `/acp`: the agent catalog is now provider-aware
+>   (`/api/agents` maps `registry.discoverAvailable()` → connectable `AgentOption`s), a streamed-usage
+>   bug in `AnthropicProvider` (dropped `input_tokens`) was fixed, and a real Claude SSE turn is
+>   asserted flowing through the shipped client → `/acp` → router → provider with intact usage
+>   (`real-provider-interop.integration.test.ts`). ✅
 >   Still open (per-tool, not headless-verifiable per §4): real-CLI shape-B adapters, `/terminal/ws` PTY.
 
 ## Purpose
