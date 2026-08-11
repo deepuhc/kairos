@@ -118,4 +118,74 @@ describe('ProviderRegistry', () => {
       expect(registry.all.length).toBe(initialCount);
     });
   });
+
+  describe('discovery caching', () => {
+    // A registry with no default providers so we can count probes exactly.
+    function probeSpyRegistry(ttlMs?: number) {
+      const registry = new ProviderRegistry({ discoveryTtlMs: ttlMs });
+      for (const p of [...registry.all]) registry.removeProvider(p.name);
+      const isAvailable = vi.fn(async () => true);
+      registry.addProvider({
+        name: 'spy',
+        isLocal: true,
+        isAvailable,
+        listModels: async () => [],
+        complete: async () => ({ content: '', model: 'spy-1' }),
+        stream: async function* () {},
+      });
+      return { registry, isAvailable };
+    }
+
+    it('reuses the cached probe within the TTL window', async () => {
+      const { registry, isAvailable } = probeSpyRegistry(5000);
+      await registry.discoverAvailable();
+      await registry.discoverAvailable();
+      await registry.listAllModels(); // also goes through discoverAvailable
+      expect(isAvailable).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-probes after the TTL expires', async () => {
+      const nowSpy = vi.spyOn(Date, 'now');
+      try {
+        const { registry, isAvailable } = probeSpyRegistry(5000);
+        nowSpy.mockReturnValue(1_000);
+        await registry.discoverAvailable();
+        nowSpy.mockReturnValue(1_000 + 5001); // past TTL
+        await registry.discoverAvailable();
+        expect(isAvailable).toHaveBeenCalledTimes(2);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('re-probes on every call when TTL is 0', async () => {
+      const { registry, isAvailable } = probeSpyRegistry(0);
+      await registry.discoverAvailable();
+      await registry.discoverAvailable();
+      expect(isAvailable).toHaveBeenCalledTimes(2);
+    });
+
+    it('invalidates the cache when a provider is added', async () => {
+      const { registry, isAvailable } = probeSpyRegistry(5000);
+      await registry.discoverAvailable();
+      registry.addProvider({
+        name: 'spy2',
+        isLocal: true,
+        isAvailable: async () => true,
+        listModels: async () => [],
+        complete: async () => ({ content: '', model: 'x' }),
+        stream: async function* () {},
+      });
+      await registry.discoverAvailable();
+      expect(isAvailable).toHaveBeenCalledTimes(2);
+    });
+
+    it('invalidates the cache when a provider is removed', async () => {
+      const { registry, isAvailable } = probeSpyRegistry(5000);
+      await registry.discoverAvailable();
+      registry.removeProvider('spy2'); // unknown, but still invalidates
+      await registry.discoverAvailable();
+      expect(isAvailable).toHaveBeenCalledTimes(2);
+    });
+  });
 });
