@@ -42,15 +42,33 @@ npm run desktop:build            # Produce .dmg / .deb / .msi
 4. **Event-sourced state**: Every pipeline transition emits events → broadcast via WebSocket → UI updates in real-time.
 5. **Provider routing**: `SmartRouter` selects models by privacy → budget → preference → complexity.
 
-## WebSocket Protocol
+## Transport
 
-Client → Server:
-- `agent:spawn`, `agent:kill`, `prompt`
-- `pipeline:start`, `pipeline:cancel`, `gate:decide`
+The **real** UI ↔ server agent contract is **ACP JSON-RPC 2.0** over a `/acp`
+WebSocket, defined by `@kairos/protocol` (types + `JsonRpcCodec`) and spoken by
+the UI's `AcpClient` (`packages/ui/src/services/acp.ts`). See
+`docs/transport-integration-spec.md` for the full method map, REST inventory,
+agent-backend boundary, and the phased plan to close the gap.
 
-Server → Client:
-- `init`, `agent:spawned`, `agent:output`, `agent:status`, `agent:exit`
-- `pipeline:state`, `pipeline:event`, `pipeline:gate`, `error`
+Key methods (camelCase params): `initialize`, `authenticate`, `session/new`,
+`session/load`, `session/prompt`, `session/set_config_option`; notification
+`session/cancel`. Server → client requests: `session/request_permission`,
+`elicitation/create`. Server → client notifications: `session/update`, plus
+Kairos extensions `_ext/log`, `_ext/stalled`, `_ext/terminal_output`.
+
+Two non-JSON-RPC channels are correct as-is and stay: `/events` (a plain
+`{event,data}` fan-out bus) and `/terminal/ws` (PTY byte stream).
+
+### Legacy `/ws` (being replaced)
+
+The server currently only serves a bespoke tagged-union transport on `/ws`
+(`packages/server/src/ws/protocol.ts`) that **no UI code calls**. It will be
+removed once `/acp` is proven. For reference:
+
+Client → Server: `agent:spawn`, `agent:kill`, `prompt`, `pipeline:start`,
+`pipeline:cancel`, `gate:decide`.
+Server → Client: `init`, `agent:spawned`, `agent:output`, `agent:status`,
+`agent:exit`, `pipeline:state`, `pipeline:event`, `pipeline:gate`, `error`.
 
 ## Code Conventions
 
