@@ -99,7 +99,7 @@ describe('PipelineEngine — gates', () => {
 });
 
 describe('PipelineEngine — cancel', () => {
-  it('records a cancellation event when cancelled at a gate', async () => {
+  it('ends in the cancelled state when cancelled at a gate', async () => {
     const engine = new PipelineEngine(
       pipeline([phase('g', [], { type: 'gate' })]),
       new RecordingExecutor(),
@@ -111,13 +111,11 @@ describe('PipelineEngine — cancel', () => {
     engine.cancel();
     const state = await runPromise;
 
-    // KNOWN BUG (see task "Fix cancel-during-gate overriding cancelled with
-    // failed"): cancel() sets status to 'cancelled' and resolves the gate with
-    // false, but executeGate's rejection branch then transitions to 'failed',
-    // clobbering 'cancelled'. The pipeline:cancelled event is still recorded.
-    // Pinning current behavior to keep the suite green; flip to 'cancelled'
-    // once the ordering is fixed.
-    expect(state.status).toBe('failed');
+    // Regression: cancel() resolves the pending gate with false, but the gate's
+    // rejection branch must NOT clobber the terminal 'cancelled' state with
+    // 'failed'. The gate phase itself is marked failed; the pipeline is cancelled.
+    expect(state.status).toBe('cancelled');
+    expect(state.phases.get('g')!.status).toBe('failed');
     expect(state.events.some((e) => e.type === 'pipeline:cancelled')).toBe(true);
   });
 
@@ -131,14 +129,12 @@ describe('PipelineEngine — cancel', () => {
   });
 });
 
-describe('PipelineEngine — failure handling (characterization of a known bug)', () => {
-  // KNOWN BUG (architecture review #8): when a phase fails, executePhase catches
-  // the error internally, the loop drains, and run()'s allCompleted check is
-  // false — so the pipeline transitions to NEITHER 'completed' NOR 'failed' and
-  // is left stuck at 'running'. This test pins the CURRENT (buggy) behavior so
-  // the suite stays green; see task "Propagate phase failure to a terminal
-  // pipeline state". Flip these expectations to 'failed' once fixed.
-  it('leaves the pipeline stuck at "running" when a phase throws (current behavior)', async () => {
+describe('PipelineEngine — failure handling', () => {
+  // Regression for arch review #8: when a phase fails, executePhase catches the
+  // error internally and the loop drains (dependents can never become ready).
+  // run() must then terminate the pipeline as 'failed' rather than leaving it
+  // stuck at 'running'.
+  it('terminates the pipeline as failed when a phase throws', async () => {
     const exec: PhaseExecutor = {
       execute: async (p) => { if (p.id === 'a') throw new Error('boom'); return 'ok'; },
     };
@@ -148,9 +144,17 @@ describe('PipelineEngine — failure handling (characterization of a known bug)'
     expect(state.phases.get('a')!.status).toBe('failed');
     // b never runs — its dependency didn't complete.
     expect(state.phases.get('b')!.status).toBe('pending');
-    // The bug: no terminal transition.
-    expect(state.status).toBe('running');
+    // Fixed: the pipeline reaches a terminal 'failed' state and records it.
+    expect(state.status).toBe('failed');
     expect(state.events.some((e) => e.type === 'phase:failed')).toBe(true);
-    expect(state.events.some((e) => e.type === 'pipeline:failed')).toBe(false);
+    const pipelineFailed = state.events.find((e) => e.type === 'pipeline:failed');
+    expect(pipelineFailed).toMatchObject({ type: 'pipeline:failed' });
+    expect((pipelineFailed as { error: string }).error).toMatch(/a/);
+  });
+
+  it('still completes normally when no phase fails', async () => {
+    const engine = new PipelineEngine(pipeline([phase('a'), phase('b', ['a'])]), new RecordingExecutor());
+    const state = await engine.run();
+    expect(state.status).toBe('completed');
   });
 });

@@ -3,12 +3,14 @@ import type { PipelineDefinition, PhaseDefinition, PhaseType, GateType } from '.
 export function parsePlan(markdown: string, name?: string): PipelineDefinition {
   const lines = markdown.split('\n');
   const phases: PhaseDefinition[] = [];
-  let planName = name || 'Unnamed Plan';
+  // Leave undefined until resolved so the first `# ` heading can supply the
+  // name; an explicit `name` argument always wins.
+  let planName = name;
 
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Extract plan name from first heading
+    // Extract plan name from the first heading (only when not already set).
     if (trimmed.startsWith('# ') && !planName) {
       planName = trimmed.slice(2).trim();
       continue;
@@ -53,7 +55,7 @@ export function parsePlan(markdown: string, name?: string): PipelineDefinition {
 
   return {
     id: `plan_${Date.now()}`,
-    name: planName,
+    name: planName || 'Unnamed Plan',
     phases,
   };
 }

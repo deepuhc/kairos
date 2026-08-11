@@ -75,12 +75,17 @@ describe('parsePlan — plan name', () => {
     expect(parsePlan('- [ ] a: x', 'My Pipeline').name).toBe('My Pipeline');
   });
 
-  it('defaults to "Unnamed Plan" when no name is provided', () => {
-    // NOTE: documents current behavior. Heading (`# Title`) extraction is
-    // presently dead code — planName is pre-seeded to 'Unnamed Plan', so the
-    // `!planName` guard never fires. Flagged as a latent bug to fix separately.
+  it('extracts the plan name from the first "# " heading when no name arg is given', () => {
     const plan = parsePlan('# Great Plan\n- [ ] a: x');
-    expect(plan.name).toBe('Unnamed Plan');
+    expect(plan.name).toBe('Great Plan');
+  });
+
+  it('an explicit name argument overrides a heading', () => {
+    expect(parsePlan('# Heading Name\n- [ ] a: x', 'Explicit').name).toBe('Explicit');
+  });
+
+  it('falls back to "Unnamed Plan" when there is neither a name arg nor a heading', () => {
+    expect(parsePlan('- [ ] a: x').name).toBe('Unnamed Plan');
   });
 
   it('always assigns a plan id', () => {

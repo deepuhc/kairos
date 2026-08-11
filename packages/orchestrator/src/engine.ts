@@ -42,11 +42,30 @@ export class PipelineEngine extends EventEmitter {
     try {
       await this.executeLoop();
 
-      const allCompleted = [...this.state.phases.values()].every(
-        (p) => p.status === 'completed' || p.status === 'skipped'
+      // If the pipeline was cancelled (or otherwise moved to a terminal state)
+      // while the loop was draining, don't override that decision.
+      if (this.state.status !== 'running') {
+        return this.state;
+      }
+
+      const phases = [...this.state.phases.values()];
+      const anyFailed = phases.some((p) => p.status === 'failed');
+      const allSettled = phases.every(
+        (p) => p.status === 'completed' || p.status === 'skipped' || p.status === 'failed'
       );
 
-      if (allCompleted) {
+      if (anyFailed) {
+        // A phase failed: the loop drained because its dependents can never
+        // become ready. Terminate the pipeline as failed rather than leaving
+        // it stuck at 'running'.
+        const failed = phases.filter((p) => p.status === 'failed').map((p) => p.id);
+        this.transition('failed');
+        this.recordEvent({
+          type: 'pipeline:failed',
+          timestamp: Date.now(),
+          error: `Phase(s) failed: ${failed.join(', ')}`,
+        });
+      } else if (allSettled) {
         this.transition('completed');
         this.recordEvent({ type: 'pipeline:completed', timestamp: Date.now() });
       }
@@ -151,6 +170,10 @@ export class PipelineEngine extends EventEmitter {
       this.setPhaseStatus(phase.id, 'completed');
       this.transition('running');
       this.recordEvent({ type: 'pipeline:resumed', timestamp: Date.now(), phaseId: phase.id });
+    } else if (this.state.status === 'cancelled') {
+      // The gate was resolved as a side effect of cancel(), which already set
+      // the terminal 'cancelled' state. Don't clobber it with 'failed'.
+      this.setPhaseStatus(phase.id, 'failed');
     } else {
       this.setPhaseStatus(phase.id, 'failed');
       this.transition('failed');
