@@ -34,6 +34,7 @@ export class AcpConnection implements Peer {
   /** Reject any in-flight server-originated requests when the socket drops. */
   close(): void {
     this.codec.reset();
+    this.agent.close?.();
   }
 
   // ── Peer ──────────────────────────────────────────────────────────────────

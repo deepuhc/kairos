@@ -18,4 +18,9 @@ export interface AcpAgent {
   handleRequest(method: string, params: Record<string, unknown>, peer: Peer): Promise<unknown>;
   /** Observe a client → server notification (session/cancel, etc.). */
   handleNotification(method: string, params: Record<string, unknown>, peer: Peer): void;
+  /**
+   * Release any resources when the client connection drops (e.g. kill a spawned
+   * subprocess). Optional — in-process agents need no teardown.
+   */
+  close?(): void;
 }

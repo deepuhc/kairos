@@ -36,6 +36,37 @@ describe('buildAgentCatalog', () => {
     expect(agents[0].label).toBe('Acme');
   });
 
+  it('appends external stdio agents after mock and providers, preserving installed', () => {
+    const agents = buildAgentCatalog({
+      mockEnabled: true,
+      providers: ['anthropic'],
+      externalAgents: [{ id: 'claude', installed: true }],
+    });
+    expect(agents.map((a) => a.id)).toEqual(['mock', 'anthropic', 'claude']);
+    const claude = agents.find((a) => a.id === 'claude');
+    expect(claude).toMatchObject({ label: 'Claude Code', installed: true, managedApp: false });
+  });
+
+  it('marks an uninstalled external agent as installed:false but still lists it', () => {
+    const agents = buildAgentCatalog({
+      mockEnabled: false,
+      externalAgents: [{ id: 'claude', installed: false }],
+    });
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toMatchObject({ id: 'claude', installed: false });
+  });
+
+  it('de-duplicates an external agent that also appears as a provider', () => {
+    // First occurrence wins, so the provider entry (installed:true) is kept.
+    const agents = buildAgentCatalog({
+      mockEnabled: false,
+      providers: ['claude'],
+      externalAgents: [{ id: 'claude', installed: false }],
+    });
+    expect(agents.map((a) => a.id)).toEqual(['claude']);
+    expect(agents[0].installed).toBe(true);
+  });
+
   it('matches the UI AgentOption shape the picker consumes', () => {
     for (const a of buildAgentCatalog({ mockEnabled: true, providers: ['anthropic'] })) {
       expect(typeof a.id).toBe('string');

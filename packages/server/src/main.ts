@@ -13,6 +13,10 @@ import type { ClientMessage } from './ws/protocol.js';
 import { AcpServer } from './acp/server.js';
 import { ProviderAcpAgent } from './acp/provider-agent.js';
 import { SessionStore } from './acp/session-store.js';
+import { StdioAcpAgent } from './acp/stdio-bridge.js';
+import { ChildProcessIo } from './acp/child-process-io.js';
+import { resolveLaunchSpec, EXTERNAL_AGENT_IDS } from './acp/launch-spec.js';
+import { isOnPath } from './acp/which.js';
 import { EventBus } from './events/bus.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
 import { buildAgentCatalog } from './rest/agent-catalog.js';
@@ -77,7 +81,14 @@ app.get('/api/agents', async (_req, res) => {
   // though the router would serve a real provider on /acp.
   const available = await registry.discoverAvailable();
   const providers = available.map((p) => p.name);
-  res.json({ agents: buildAgentCatalog({ mockEnabled, providers }) });
+  // External stdio CLI agents (e.g. "claude"). `installed` reflects whether the
+  // resolved launch command is on PATH so the picker can show an uninstalled
+  // backend as unavailable instead of offering a connect that fails to spawn.
+  const externalAgents = EXTERNAL_AGENT_IDS.map((id) => ({
+    id,
+    installed: isOnPath(resolveLaunchSpec(id).command),
+  }));
+  res.json({ agents: buildAgentCatalog({ mockEnabled, providers, externalAgents }) });
 });
 
 // Running agent processes (distinct from the selectable catalog above).
@@ -122,8 +133,22 @@ const hub = new WebSocketHub();
 // One session store shared by every per-connection agent, so session/load
 // (resume) recovers real history and session ids stay unique process-wide.
 const sessions = new SessionStore();
+
+// Provider-backed agent ids are served in-process by ProviderAcpAgent (registry
+// → router → provider). Any other id (e.g. "claude") is an external ACP CLI
+// spawned over stdio via StdioAcpAgent — the adapter process speaks JSON-RPC
+// and we transparently proxy it to the browser. The launch command is a config
+// seam (resolveLaunchSpec): the product runs Claude Code directly; local testing
+// can go through `devai launch` with KAIROS_ACP_USE_DEVAI=1.
+const PROVIDER_AGENT_IDS = new Set(['mock', 'anthropic', 'openai', 'gemini', 'ollama']);
 const acpServer = new AcpServer({
-  createAgent: () => new ProviderAcpAgent({ router, sessions }),
+  createAgent: ({ agentId, cwd }) => {
+    if (PROVIDER_AGENT_IDS.has(agentId)) {
+      return new ProviderAcpAgent({ router, sessions });
+    }
+    const spec = resolveLaunchSpec(agentId);
+    return new StdioAcpAgent(new ChildProcessIo(spec, cwd));
+  },
 });
 
 // The `/events` fan-out bus — a plain one-way {event,data} publish stream the

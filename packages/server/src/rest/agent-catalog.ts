@@ -19,6 +19,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   gemini: 'Gemini',
   ollama: 'Ollama (local)',
+  claude: 'Claude Code',
 };
 
 function labelFor(id: string): string {
@@ -35,6 +36,12 @@ export interface AgentCatalogInput {
    * router would happily serve a real provider.
    */
   providers?: string[];
+  /**
+   * External ACP CLI agents spawned over stdio (e.g. "claude" via its ACP
+   * adapter). Distinct from in-process providers: connecting one launches a
+   * subprocess. `installed` reflects whether its launch command is on PATH.
+   */
+  externalAgents?: Array<{ id: string; installed: boolean }>;
 }
 
 /**
@@ -44,10 +51,16 @@ export interface AgentCatalogInput {
  * provider isn't listed twice when it's both available and the mock.
  */
 export function buildAgentCatalog(input: AgentCatalogInput): AgentOption[] {
-  const ids: string[] = [];
-  if (input.mockEnabled) ids.push('mock');
-  for (const name of input.providers ?? []) {
-    if (!ids.includes(name)) ids.push(name);
-  }
-  return ids.map((id) => ({ id, label: labelFor(id), managedApp: false, installed: true }));
+  const options: AgentOption[] = [];
+  const seen = new Set<string>();
+  const add = (id: string, installed: boolean) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    options.push({ id, label: labelFor(id), managedApp: false, installed });
+  };
+
+  if (input.mockEnabled) add('mock', true);
+  for (const name of input.providers ?? []) add(name, true);
+  for (const ext of input.externalAgents ?? []) add(ext.id, ext.installed);
+  return options;
 }
