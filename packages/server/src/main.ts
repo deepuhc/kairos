@@ -10,6 +10,8 @@ import { PipelineEngine, parsePlan } from '@kairos/orchestrator';
 import type { PhaseDefinition, ExecutionContext } from '@kairos/orchestrator';
 import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
+import { AcpServer } from './acp/server.js';
+import { FakeAcpAgent } from './acp/fake-agent.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,7 +88,29 @@ app.get('*', (req, res, next) => {
 
 // --- HTTP Server + WebSocket ---
 const server = createServer(app);
-const hub = new WebSocketHub(server);
+const hub = new WebSocketHub();
+
+// ACP JSON-RPC transport on /acp. Until real ACP agent binaries are wired
+// (transport-integration-spec §5 Phase E), every connection is served by an
+// in-memory FakeAcpAgent so the UI's Agents tab works end-to-end. The mock
+// permission flow is enabled so the bidirectional path is exercised.
+const acpServer = new AcpServer({
+  createAgent: () => new FakeAcpAgent({ chunkDelayMs: 15 }),
+});
+
+// Central upgrade router: dispatch by path so /ws (hub) and /acp (ACP) coexist
+// on one http.Server. A noServer WSS per path — a path-bound WSS would destroy
+// the other's upgrades with a 400.
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url ?? '', 'http://localhost');
+  if (pathname === '/ws') {
+    hub.handleUpgrade(req, socket, head);
+  } else if (pathname === '/acp') {
+    acpServer.handleUpgrade(req, socket, head);
+  } else {
+    socket.destroy();
+  }
+});
 
 hub.onMessage(async (ws, msg: ClientMessage) => {
   switch (msg.type) {
@@ -196,5 +220,6 @@ wss?.on('connection', async (ws: any) => {
 server.listen(PORT, () => {
   console.log(`\n  Kairos server running at http://localhost:${PORT}`);
   console.log(`  WebSocket at ws://localhost:${PORT}/ws`);
+  console.log(`  ACP transport at ws://localhost:${PORT}/acp`);
   console.log(`  API at http://localhost:${PORT}/api/health\n`);
 });

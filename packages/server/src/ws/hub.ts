@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'node:http';
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
 import type { ServerMessage, ClientMessage } from './protocol.js';
 
 export class WebSocketHub {
@@ -7,8 +8,10 @@ export class WebSocketHub {
   private clients = new Set<WebSocket>();
   private messageHandler?: (ws: WebSocket, msg: ClientMessage) => void;
 
-  constructor(server: Server) {
-    this.wss = new WebSocketServer({ server, path: '/ws' });
+  // `noServer` mode: a central upgrade router (see main.ts) dispatches by path
+  // so the hub (/ws) can coexist with the ACP transport (/acp) on one server.
+  constructor() {
+    this.wss = new WebSocketServer({ noServer: true });
 
     this.wss.on('connection', (ws) => {
       this.clients.add(ws);
@@ -29,6 +32,13 @@ export class WebSocketHub {
       ws.on('error', () => {
         this.clients.delete(ws);
       });
+    });
+  }
+
+  /** Route an HTTP upgrade for this hub's path into a WebSocket connection. */
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    this.wss.handleUpgrade(req, socket, head, (ws) => {
+      this.wss.emit('connection', ws, req);
     });
   }
 
