@@ -1,6 +1,6 @@
 # Kairos — Project State Reference
 
-> Last updated: 2026-08-08
+> Last updated: 2026-08-12
 
 ## What is Kairos?
 
@@ -66,7 +66,7 @@ Claude, Codex, Gemini, GitHub Copilot, Goose, OpenCode, Mistral Vibe, Kiro, Cust
 - Live reasoning display, tool call cards, file edit diffs
 - Terminal integration (xterm.js)
 - Plan/task progress tracker
-- Protocol frame inspector ("Behind the Scenes")
+- "Behind the Scenes" static reference pane (pipeline diagram, auth status, curated protocol frames)
 
 ### 4. Session Management
 - Persistence, multi-session support, resume
@@ -77,7 +77,7 @@ Claude, Codex, Gemini, GitHub Copilot, Goose, OpenCode, Mistral Vibe, Kiro, Cust
 ### 5. Safety & Isolation
 - Working directory sandbox (FsScope)
 - Git worktree isolation
-- Permission prompts with allow/deny/allow_always
+- Tiered permission model (Plan / Ask / Auto / Full-auto) with always-on danger floor
 - Diff review before accepting changes
 
 ### 6. VS Code Integration
@@ -108,13 +108,31 @@ Claude, Codex, Gemini, GitHub Copilot, Goose, OpenCode, Mistral Vibe, Kiro, Cust
 - Vault (encrypted credentials)
 - Diagnostics
 
+### 11. Team-Role Personas & Autonomous Orchestrator
+- 7 built-in team-role personas: Product Marketing, UX Designer, Software Architect, Project Manager, QA Engineer, Documentation Engineer, Program Manager
+- Server-side DAG coordinator (`packages/server/src/orchestrator/`) drives a project through the full lifecycle autonomously
+- Each persona writes a typed artifact to disk; a gate validates the artifact before the DAG advances
+- Program Manager runs as a supervisor throughout, maintaining an append-only `PROGRESS.md` progress ledger (dual-write with machine state in `.kairos/orchestrator-state.json`)
+- `AgentWatchdog` enforces heartbeat (3 min), start-to-close (30 min), and schedule-to-close (2 h) timeouts + soft-stall loop detection
+- Provider-agnostic: SmartRouter assigns model tiers (frontier / mid / cheap) per persona
+- One project at a time; REST: `POST /api/orchestrator/start`, `GET /api/orchestrator/state`, `GET /api/orchestrator/roles`
+- Progress streams as `orchestrator:*` events over the `/events` bus
+
+### 12. Activity View (developer mode)
+- Top-nav **Activity** tab, visible in Developer mode only
+- Renders the orchestrator pipeline DAG with per-phase status (pending / ready / running / blocked / done) and liveness (ok / soft-stall / stalled / timeout)
+- Shows last-activity relative time, attempt count, and blocked reason per phase
+- Live updates via `orchestrator:update` events; `GET /api/orchestrator/state` for initial snapshot and reconnect fallback
+- Backed by `kairos-activity` Lit component (`packages/ui/src/components/activity-view.ts`)
+
 ## UI Layout
 
 - **Left sidebar**: Session list (active/pinned/recent)
 - **Main column**: Live session view or tab content
-- **Right rail**: Tabbed panels (Files, Prompts, Plan, Review, Summary, Frames)
+- **Right rail**: Side panels (Plan, Review, Summary)
 
-**Navigation tabs** (6): Agents, Plugins & Skills, Customize, History, VSCode, Settings
+**Navigation tabs**: Agents, Files (global, session-bound), Prompts (global, session-bound), Plugins & Skills, Customize, History, VSCode, Settings
+**Developer mode adds**: Plan, Review, Activity
 
 **Composer**: Enter to send, Shift+Enter newline, queue mid-turn, @file mentions, /slash commands, drag-drop attachments
 

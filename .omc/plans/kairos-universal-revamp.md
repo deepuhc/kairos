@@ -1,6 +1,20 @@
 # Kairos Universal AI Assistant - Requirements, Functional Design & Architecture
 
 > Version: 1.0 | Date: 2026-08-08 | Status: DRAFT
+>
+> **Progress note (2026-08-12):** Several themes from this vision have landed on
+> `v2-rebuild` via the 5-item feedback delivery (see `.omc/plans/feedback-5items-brief.md`
+> and `PROGRESS.md`):
+> - **Multi-agent orchestration (§3.4):** a server-side DAG coordinator now drives
+>   7 built-in team-role personas (`packages/personas`) autonomously, guarded by a
+>   layered liveness watchdog. Docs: `packages/ui/docs/guide/team-orchestrator.md`.
+> - **Security & permissions (§3.7):** the boolean auto-accept was replaced by a
+>   4-tier permission model (Plan / Ask / Auto / Full-auto) with an always-on danger floor.
+> - **Navigation/IA (§4.1):** top-nav Files & Prompts are now real session-bound
+>   global views; the Frames protocol-inspector feature was removed.
+> - A developer-mode **Activity** view surfaces the orchestrator pipeline live.
+>
+> This doc remains the broader vision; the task list in §7 is not yet fully delivered.
 
 ---
 

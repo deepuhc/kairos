@@ -1,6 +1,6 @@
 # Agents
 
-**The headline feature.** The Agents tab is a full agentic coding cockpit inside the Kairos desktop app — a live [Agent Client Protocol](https://agentclientprotocol.com) client, not a terminal wrapper. You talk to Claude, Gemini, Codex, and other coding agents; watch them stream reasoning, task plans, tool calls, file edits, and embedded terminals inline; and keep every change on a leash with permission prompts, isolated git worktrees, prompt-level Edit/Fork rewind, and inline diff review.
+**The headline feature.** The Agents tab is a full agentic coding cockpit inside the Kairos desktop app — a live [Agent Client Protocol](https://agentclientprotocol.com) client, not a terminal wrapper. You talk to Claude, Gemini, Codex, and other coding agents; watch them stream reasoning, task plans, tool calls, file edits, and embedded terminals inline; and keep every change on a leash with a tiered permission model, isolated git worktrees, prompt-level Edit/Fork rewind, and inline diff review.
 
 > **Why it exists.** Coding agents normally live in a terminal, where their work scrolls past and disappears, changes land straight in your working tree, and running two at once means two windows. The Agents tab turns that into a durable, reviewable, multi-session workspace — with credentials injected automatically so you can focus on the work.
 
@@ -9,7 +9,7 @@
 - [The composer](#the-composer)
 - [Session controls](#session-controls)
 - [The side panels (right rail)](#the-side-panels-right-rail)
-- [Permissions & auto-accept](#permissions--auto-accept)
+- [Permissions](#permissions)
 - [Safety: worktrees & prompt rewind](#safety-worktrees--prompt-rewind)
 - [Edit or fork from any past prompt](#edit-or-fork-from-any-past-prompt)
 - [Running many agents at once](#running-many-agents-at-once)
@@ -25,7 +25,7 @@ The tab is an edge-to-edge, three-region workspace (think Cursor, Zed, or Claude
 
 - **Left sidebar** — your session list. From top to bottom: a layout toolbar, the **New session** button, your **Active** sessions (live in this tab), your **Pinned** sessions (past sessions you deliberately keep on hand), your **Recent** sessions (past ones on disk), and a mascot in the footer. Drag its right edge to resize; drag it narrow and it snaps to a slim icon rail.
 - **Main column** — shows one of three things: the **new-session picker** (when nothing is focused), a **live session** (header + streaming timeline + composer), or the **Behind the Scenes** reference pane.
-- **Right rail** — inside a live session, a vertical strip of icon buttons (Files, Prompts, Plan, Review, Summary, Frames) that open a resizable side panel. Opening a panel reflows the chat narrower rather than covering it.
+- **Right rail** — inside a live session, a vertical strip of icon buttons (Plan, Review, Summary) that open a resizable side panel. Opening a panel reflows the chat narrower rather than covering it.
 
 The layout toolbar at the top of the sidebar lets you toggle **Behind the Scenes**, hide the top navigation header to reclaim vertical space, collapse the sidebar to a rail, and reopen the side panel.
 
@@ -93,8 +93,8 @@ The bar at the top of a session shows the agent, the working directory, and — 
 
 - **Context & cost meter** — a fill bar with `{used}/{size}` tokens and, when known, a dollar cost. Hover for a breakdown. It turns amber past 70% of the context window and red past 90%.
 - **Compact** — sends `/compact` to summarize the conversation and reclaim context. Available when the agent is idle.
-- **Mode / Model / Effort** — these show as chips in the composer's left footer. **Mode** is one of **Default**, **Accept Edits**, **Plan**, or **Don't Ask**. You can also switch **model** and reasoning **effort** on the fly. Your choices are remembered per agent for next time.
-- **Auto-accept shield** — see [Permissions](#permissions--auto-accept).
+- **Model / Effort** — these show as chips in the composer's left footer. You can switch **model** and reasoning **effort** on the fly. Your choices are remembered per agent for next time.
+- **Permission tier picker** — a shield button in the session header that lets you choose how autonomously the agent acts. See [Permissions](#permissions).
 - **Copy all** — copies the whole conversation as Markdown.
 - **End** — ends the session.
 
@@ -104,24 +104,48 @@ The bar at the top of a session shows the agent, the working directory, and — 
 
 The far-right rail opens one panel at a time (they're mutually exclusive):
 
-- **Files** — a read-only file browser scoped to the session's working directory: a lazy-loading tree with a syntax-highlighted preview. Binary and oversized files are flagged rather than rendered.
-- **Prompts** — jump back to any message you sent this session; clicking scrolls the timeline to it. The badge counts your messages.
 - **Plan** — the agent's task plan and progress (✓ done / ▸ in-progress / ○ pending). The badge shows `done/total`. Not every session produces a plan.
 - **Review** — the change-review panel. Header shows totals (`N files +X −Y`); a per-file list with **A/M/D** badges (Added / Modified / Removed) sits beside the selected file's full diff. Toggle **Unified** / **Split**; unchanged context collapses into expandable gaps. The badge counts changed files.
 - **Summary** — an agent-authored markdown recap of what changed and why, generated on first open and kept **out of the chat timeline** so it never clutters the conversation. Use **Generate summary** / **Regenerate**.
-- **Frames** — a live ACP protocol inspector showing the raw JSON-RPC frames streaming from the agent. For when you want to see exactly how the sausage is made.
 
-> **Behind the Scenes** (the toggle in the sidebar toolbar, separate from the rail) is the *static* educational companion to Frames: a pipeline diagram, auth status, and curated protocol frames paired with the UI they produce.
+**Files and Prompts are top-nav global views** (see the navigation bar at the top of the app), not right-rail panels. They stay bound to the active session as you use them. A separate in-session Files side panel can open when you click a linked file in the conversation, showing that file in context.
+
+> **Behind the Scenes** (the toggle in the sidebar toolbar) is a static reference pane: a pipeline diagram, auth status, and curated protocol frames paired with the UI they produce.
 
 ---
 
-## Permissions & auto-accept
+## Permissions
 
-When an agent wants to run a tool it can't auto-run, an **"Approve this action?"** strip appears on that tool card, glowing with an accent border. The agent's options render as buttons — allow options filled, reject options outlined.
+When an agent wants to run a tool and the session's permission tier requires approval, an **"Approve this action?"** strip appears on that tool card, glowing with an accent border. The agent's options render as buttons — allow options filled, reject options outlined.
 
 Focus jumps to the Allow button, so you can decide with the keyboard: **Enter** allows, **Esc** rejects. The sidebar and timeline show *"Waiting for your answer…"* until you do.
 
-**Auto-accept** is a shield toggle in the session header. Turn it **green** and permission prompts resolve themselves with the first allow option. It persists across reloads. Use it deliberately — for tasks where you're fine letting the agent act without review.
+### Permission tiers
+
+The **permission tier picker** is a shield button in the session header. Click it to open a menu with four tiers (ordered from least to most autonomous):
+
+| Tier | Label | Behavior |
+|---|---|---|
+| **Plan** | Plan only | Read-only. The agent can look but not edit or run commands. Reads are auto-allowed; everything else is auto-rejected. |
+| **Ask** | Ask every time | **(Default.)** Every action prompts for your approval. Nothing runs without your explicit OK. |
+| **Auto** | Auto (guarded) | Auto-allows reads, in-workspace edits, and a known-safe set of commands (build tools, test runners, linters). Prompts for anything risky — deletions, network fetches, unknown commands. |
+| **Full auto** | Full auto | Auto-approves everything except the always-on danger floor (see below). Gated behind a one-time confirmation. |
+
+Your tier choice persists across reloads for that session.
+
+### The always-on danger floor
+
+Regardless of tier — even in Full auto — a hard set of patterns **always prompts** and can never be silently approved:
+
+- `rm -rf` and other recursive/force deletes
+- `sudo`
+- `curl … | bash` and `wget … | sh` (pipe-to-shell)
+- `git push --force`, `git reset --hard`, `git clean -f`
+- Writes, deletes, or moves to paths outside the session workspace
+- Interpreter inline-code flags (`node -e`, `python3 -c`, `deno -e`, etc.)
+- `mkfs`, `dd` to a device, fork bombs, `netcat -e`, and similar system-destructive patterns
+
+The danger floor is enforced client-side by Kairos for every agent regardless of which native mode the underlying agent runs in.
 
 > **Agent questions.** Separately, an agent may ask a structured question (an "elicitation"), shown as an inline **Agent question** card with fields and **Cancel** / **Skip** / **Submit** buttons.
 

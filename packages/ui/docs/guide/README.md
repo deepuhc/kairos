@@ -6,7 +6,7 @@ The in-depth, end-user reference for **using** Kairos — every tab, every featu
 
 | Guide | What's inside |
 |---|---|
-| **[Agents](agents.md)** | The agentic coding cockpit: starting sessions, the composer, session controls, the review/summary/files/plan panels, permissions & auto-accept, worktrees, prompt Edit/Fork rewind, sub-agents, stall recovery, and running many agents at once. |
+| **[Agents](agents.md)** | The agentic coding cockpit: starting sessions, the composer, session controls, the review/summary/plan panels, the tiered permission model, worktrees, prompt Edit/Fork rewind, sub-agents, stall recovery, and running many agents at once. |
 | **[Agents: types, setup & security](agents-and-setup.md)** | What the different agents are (built-in vs. custom, cloud vs. local), how to connect your own agent, a walkthrough for a local/offline agent, and what the working-directory sandbox does and doesn't protect. |
 | **[Plugins & Skills](plugins-and-skills.md)** | The installable catalog: searching and filtering, per-item cards, install options (scope, backend, version pinning, install-from-repo), updates, favorites, and the live output panel. |
 | **[Customize](customize.md)** | Standing context for every agent: Rules, Prompts, Roles, MCP Servers, and Hooks. |
@@ -14,6 +14,7 @@ The in-depth, end-user reference for **using** Kairos — every tab, every featu
 | **[VSCode](vscode.md)** | Workspace discovery, configuration, and launching VSCode. |
 | **[kairos settings](kairos-settings.md)** | Config keys, feature flags, updates, security/vault, and the Doctor diagnostics. |
 | **[Account & Notifications](account-and-notifications.md)** | The avatar menu, login/session state, Kairos desktop/source update cues, and the chime/tab-badge notification system. |
+| **[Team Orchestrator & Activity View](team-orchestrator.md)** | The autonomous delivery orchestrator, the seven built-in team-role personas, artifact contracts, the liveness watchdog, and the developer-mode Activity tab. |
 
 ## Conventions used across these guides
 

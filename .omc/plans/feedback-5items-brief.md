@@ -1,5 +1,22 @@
 # Kairos — 5-Item Feedback Delivery Brief
 
+> **STATUS: ALL 5 ITEMS DELIVERED (2026-08-12).** Verified green (`tsc -b` clean;
+> server+personas 152/152, UI 345/345) and committed on `v2-rebuild`.
+>
+> | # | Item | Commit(s) |
+> |---|------|-----------|
+> | 4 | Remove Frames feature | `d009897` |
+> | 1 | Top-nav Files & Prompts as global views | `cf0d616` |
+> | 2 | Tiered permission model (Plan/Ask/Auto/Full-auto + danger floor) | `c9445c2`, `0ae099d` |
+> | 3 | 7 team-role personas + autonomous orchestrator | `8a31f77`, `522e356` |
+> | 5 | Orchestrator/subagent Activity view | `522e356`, `4b6e795` |
+>
+> Also fixed alongside: session rename/pin silent no-op (`55f20f0`) — the
+> `/api/sessions/*` mutation family had no real routes (501 catch-all). See
+> `PROGRESS.md` for the full running log and the docs guide
+> `packages/ui/docs/guide/team-orchestrator.md` for the shipped orchestrator.
+> The spec below is retained as the original delivery brief.
+
 **Owner:** orchestrator agent. **Mode:** fully autonomous. **Repo:** /Users/ddeepak/projects/kairos, branch `v2-rebuild` (git — this is a 2p repo, use git NOT perforce).
 
 ## Standing rules (non-negotiable)

@@ -123,7 +123,7 @@ If your agent is a standalone ACP binary (not one of the built-ins), register it
    - Leave **Command** *not* set to `kairos` (you want it bare, not wrapped) and leave the managed-app box unchecked.
 4. **Add agent**, then start a session with its new chip.
 
-> **Why this is genuinely offline:** the command is your local binary, the model runner is on `localhost`, and there's no `kairos launch` wrapper and no provider key — so nothing leaves your machine except what the model does locally. (If you want to be certain, the [Behind the Scenes / Frames](agents.md#the-side-panels-right-rail) inspector shows every JSON-RPC frame, and you can watch the process make no outbound network calls.)
+> **Why this is genuinely offline:** the command is your local binary, the model runner is on `localhost`, and there's no `kairos launch` wrapper and no provider key — so nothing leaves your machine except what the model does locally. (If you want to be certain, the **Behind the Scenes** pane, toggled from the sidebar toolbar, shows curated protocol frames alongside the UI they produce, so you can confirm no outbound calls are made.)
 
 ---
 
@@ -157,7 +157,7 @@ So the directory you pick on the new-session picker **is** the blast radius for 
 
 The FsScope guard constrains the **ACP file/terminal tools**. It is **not** a full process sandbox. Be clear-eyed about the limits:
 
-- **A terminal command can still reach the network and the wider machine.** The sandbox pins the command's *working directory*, not its capabilities — a shell step the agent runs can open a socket, hit an internal service, or read your home directory if the OS permits it. The protection is "the agent's file tools stay in the cwd," not "the agent's shell is jailed." Always keep **permission prompts** on (don't blanket-enable auto-accept) for agents you don't fully trust, so you approve each command.
+- **A terminal command can still reach the network and the wider machine.** The sandbox pins the command's *working directory*, not its capabilities — a shell step the agent runs can open a socket, hit an internal service, or read your home directory if the OS permits it. The protection is "the agent's file tools stay in the cwd," not "the agent's shell is jailed." Keep the permission tier at **Ask** (the default) or **Auto** (guarded) for agents you don't fully trust, so you review commands before they run; avoid **Full auto** for unfamiliar agents.
 - **What the model sees leaves with the model.** A cloud-connected agent sends the file contents it reads to a **cloud provider**. If your concern is sensitive code reaching an outside service, that's the exposure to weigh — and it's exactly the argument for a **local, offline agent** (Option A/B above), where the model runs on your machine and nothing is sent out.
 - **Custom agents run verbatim, with your environment.** A `+ Custom` agent is whatever command you typed — Kairos doesn't inspect it. Only register agents you trust, from sources you trust, the same way you'd treat any CLI you install.
 - **MCP servers and hooks are their own trust surface.** [MCP servers](customize.md#mcp-servers) you configure are launched for every session and can expose arbitrary tools; [hooks](customize.md#hooks) run shell commands on agent events. Both run with your privileges.
