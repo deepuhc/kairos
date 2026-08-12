@@ -1,12 +1,13 @@
-import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { kairosPath, atomicWrite, createSerializedMutator } from '../kairos-home.js';
 
 // Durable, user-scoped overrides for sessions the UI shows: a custom title and a
 // pin list. The underlying session history the CLI produces is read-only to us,
 // so renames/pins can't be written back there — we persist them here and merge
 // on read. Stored at ~/.kairos/session-overrides.json (override the home with
-// KAIROS_HOME so tests don't touch the real dotfile).
+// KAIROS_HOME so tests don't touch the real dotfile). Path + atomic write +
+// serialized mutate queue come from the shared kairos-home helper, so this file
+// and the orchestrator state store share one state home and one write discipline.
 
 export interface SessionOverrides {
   /** id → custom title. Absent id = use the session's own/auto title. */
@@ -18,8 +19,7 @@ export interface SessionOverrides {
 const EMPTY: SessionOverrides = { titles: {}, pinned: [] };
 
 function overridesPath(): string {
-  const home = process.env.KAIROS_HOME || join(homedir(), '.kairos');
-  return join(home, 'session-overrides.json');
+  return kairosPath('session-overrides.json');
 }
 
 /** Read the overrides file, tolerating a missing or malformed file. */
@@ -38,29 +38,14 @@ export async function readOverrides(): Promise<SessionOverrides> {
 
 /** Write overrides atomically (temp file + rename) so a crash can't truncate it. */
 export async function writeOverrides(next: SessionOverrides): Promise<void> {
-  const path = overridesPath();
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
-  await writeFile(tmp, JSON.stringify(next, null, 2), 'utf8');
-  await rename(tmp, path);
+  await atomicWrite(overridesPath(), JSON.stringify(next, null, 2));
 }
 
 /** Read-modify-write helper that serializes concurrent mutations. */
-let queue: Promise<unknown> = Promise.resolve();
-export function mutateOverrides(
-  fn: (o: SessionOverrides) => SessionOverrides,
-): Promise<SessionOverrides> {
-  const run = async (): Promise<SessionOverrides> => {
-    const current = await readOverrides();
-    const next = fn(current);
-    await writeOverrides(next);
-    return next;
-  };
-  const result = queue.then(run, run);
-  // Keep the chain alive even if a mutation rejects, so later writes still run.
-  queue = result.catch(() => undefined);
-  return result;
-}
+export const mutateOverrides = createSerializedMutator<SessionOverrides>(
+  readOverrides,
+  writeOverrides,
+);
 
 // --- Pure transforms (exported for unit testing) ---
 
