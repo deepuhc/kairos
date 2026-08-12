@@ -21,6 +21,11 @@ import { buildSlashMenuItems, isRewindCommand, isSlashCommandMessage, type Slash
 import { nextPrompt, previousPrompt, type PromptHistoryNavigation, type PromptHistoryStep } from '../services/prompt-history.js';
 import { composeLaunchPreamble, formatTrailingLaunchPreamble } from '../services/launch-context.js';
 import { hydrateAgentPrefs, pushPrefs, loadLastAgent } from '../services/agent-prefs-sync.js';
+import {
+  decidePermission, pickOption, tierToAgentMode, tierFromLegacyAutoAccept,
+  tierImpliesAutoAccept, DEFAULT_PERMISSION_TIER, PERMISSION_TIERS, PERMISSION_TIER_META,
+  type PermissionTier,
+} from '../services/permission-policy.js';
 import { buildSessionSearchPrompt, findCitedSessions } from '../services/session-search.js';
 import { usableSessionDir } from '../services/session-resume.js';
 import {
@@ -183,11 +188,15 @@ interface AgentConn {
 const LAST_CWD_KEY = 'kairos-agents:last-cwd';
 // Last agent chosen in the picker, pre-selected next time.
 const LAST_AGENT_KEY = 'kairos-agents:last-agent';
-// Auto-accept preference, persisted so it carries across reloads and new sessions.
+// Default permission tier for new sessions, persisted so it carries across
+// reloads. Supersedes AUTO_ACCEPT_KEY (kept only for legacy migration).
+const PERMISSION_TIER_KEY = 'kairos-agents:permission-tier';
+// Legacy boolean auto-accept preference. Read only to migrate old installs to a
+// tier (on → full-auto); still mirrored on write for back-compat.
 const AUTO_ACCEPT_KEY = 'kairos-agents:auto-accept';
 // One-time nudge shown after the user's first manual permission approval,
-// pointing at the Auto-accept toggle. Once dismissed or auto-accept is turned
-// on, it never shows again.
+// pointing at the permission-tier control. Once dismissed or a non-Ask tier is
+// chosen, it never shows again.
 const AUTO_ACCEPT_HINT_KEY = 'kairos-agents:auto-accept-hint-seen';
 // Last role/persona selected in the picker ('' = none). Global, not per-agent:
 // roles are agent-agnostic, so the same choice carries across engine switches.
@@ -300,19 +309,26 @@ function saveLastRole(roleId: string) {
   } catch { /* quota / disabled — ignore */ }
 }
 
-function loadAutoAccept(): boolean {
+// Load the default permission tier for a new session. Prefers the tier key;
+// migrates the legacy boolean auto-accept (on → full-auto) when only that exists.
+function loadPermissionTier(): PermissionTier {
   try {
-    return localStorage.getItem(AUTO_ACCEPT_KEY) === '1';
+    const stored = localStorage.getItem(PERMISSION_TIER_KEY);
+    if (stored && (PERMISSION_TIERS as string[]).includes(stored)) return stored as PermissionTier;
+    return tierFromLegacyAutoAccept(localStorage.getItem(AUTO_ACCEPT_KEY) === '1');
   } catch {
-    return false;
+    return DEFAULT_PERMISSION_TIER;
   }
 }
 
-function saveAutoAccept(on: boolean) {
+// Persist the default permission tier. Mirrors the legacy boolean for
+// back-compat with any reader that predates the tier field.
+function savePermissionTier(tier: PermissionTier) {
   try {
-    localStorage.setItem(AUTO_ACCEPT_KEY, on ? '1' : '0');
+    localStorage.setItem(PERMISSION_TIER_KEY, tier);
+    localStorage.setItem(AUTO_ACCEPT_KEY, tierImpliesAutoAccept(tier) ? '1' : '0');
   } catch { /* quota / disabled — ignore */ }
-  pushPrefs({ autoAccept: on });
+  pushPrefs({ permissionTier: tier, autoAccept: tierImpliesAutoAccept(tier) });
 }
 
 // Fallback returns true (treat as "already seen") so a broken/disabled
@@ -541,9 +557,11 @@ export class DevaiAgents extends LitElement {
   private timelineDepsCache = new WeakMap<AgentSession, unknown[]>();
   // Slash-command menu: open while the draft is a bare `/query`, with one row
   // highlighted for keyboard selection.
-  // One-time coach-mark pointing at the Auto-accept toggle, raised after the
-  // user's first manual permission approval (see handlePermissionChoice).
+  // One-time coach-mark pointing at the permission-tier control, raised after
+  // the user's first manual permission approval (see handlePermissionChoice).
   @state() private showAutoAcceptHint = false;
+  // Whether the permission-tier picker menu (segmented header control) is open.
+  @state() private permissionMenuOpen = false;
   @state() private slashOpen = false;
   // Same menu, opened by clicking the `/` footer button. Shows the full list
   // unfiltered and toggles independently of the draft so the user's text isn't
@@ -1056,12 +1074,23 @@ export class DevaiAgents extends LitElement {
     .session-actions .icon-btn:disabled, .usage-group .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .session-actions .icon-btn.danger:hover:not(:disabled) { color: var(--red); border-color: var(--red); background: var(--red-a15); }
 
-    /* Auto-accept toggle: only the shield icon turns green when "on"; label stays readable. */
-    .auto-accept-btn.on { color: var(--bright-white); border-color: var(--accent); background: var(--accent-a18); }
-    .auto-accept-btn.on:hover:not(:disabled) { color: var(--bright-white); border-color: var(--accent); background: var(--accent-a25); }
-    .auto-accept-btn.on svg { color: var(--emerald); }
+    /* Permission-tier control: a shield trigger + caret that colors by autonomy
+       level. Plan = neutral, Ask = default, Auto = accent (guarded), Full auto =
+       amber (the shield icon signals "watch me"). */
+    .perm-trigger .caret { width: 11px; height: 11px; opacity: 0.7; margin-left: -2px; }
+    .perm-trigger.open .caret { transform: rotate(180deg); }
+    .perm-trigger.tier-auto { color: var(--bright-white); border-color: var(--accent); background: var(--accent-a18); }
+    .perm-trigger.tier-auto:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-a25); }
+    .perm-trigger.tier-auto svg:not(.caret) { color: var(--emerald); }
+    .perm-trigger.tier-full-auto { color: var(--bright-white); border-color: var(--amber, #d99a2b); background: var(--amber-a15, rgba(217,154,43,0.15)); }
+    .perm-trigger.tier-full-auto:hover:not(:disabled) { border-color: var(--amber, #d99a2b); background: var(--amber-a25, rgba(217,154,43,0.25)); }
+    .perm-trigger.tier-full-auto svg:not(.caret) { color: var(--amber, #d99a2b); }
+    .perm-trigger.tier-plan svg:not(.caret) { color: var(--gray); }
+    /* The tier menu lives in the header, so it opens downward and right-aligned
+       (the shared .config-menu opens upward for the composer footer). */
+    .perm-menu { top: calc(100% + 7px); bottom: auto; left: auto; right: 0; min-width: 260px; max-width: 320px; }
 
-    /* One-time nudge pointing at the Auto-accept toggle. */
+    /* One-time nudge pointing at the permission-tier control. */
     .auto-accept-wrap { position: relative; display: inline-flex; }
     .auto-accept-hint {
       position: absolute;
@@ -3052,7 +3081,7 @@ export class DevaiAgents extends LitElement {
       agentId: info.agentId,
       agentName: this.conn(info.agentId)?.name ?? this.agentLabel(info.agentId),
       configOptions,
-      autoAccept: loadAutoAccept(),
+      permissionTier: loadPermissionTier(),
       worktree: pending?.worktree,
       pendingPreamble: preamble || undefined,
       searchCandidates: pending?.searchCandidates,
@@ -3150,7 +3179,7 @@ export class DevaiAgents extends LitElement {
       // Only auto-title from the replay if we don't already have a real one.
       autoTitle: !knownTitle,
       loading: true,
-      autoAccept: loadAutoAccept(),
+      permissionTier: loadPermissionTier(),
       worktree,
     });
     this.saveActivePanelState();
@@ -3478,12 +3507,21 @@ export class DevaiAgents extends LitElement {
   private onPermissionRequest(req: PermissionRequest) {
     const s = this.session(req.sessionId);
     if (!s) return;
-    if (s.autoAccept) {
-      const pick = req.options.find((o) => o.kind.startsWith('allow'));
-      if (pick) {
-        this.client.resolvePermission(req.requestId, { outcome: 'selected', optionId: pick.optionId });
+    // Tiered interception: the ACP spec lets clients auto-answer based on user
+    // settings, and PermissionOption.kind is a display hint whose optionIds the
+    // agent owns — so we decide per tier, then map the decision onto a concrete
+    // optionId. 'prompt' falls through to surfacing the request. This is the
+    // universal baseline: it works against any agent even when the agent has no
+    // native guarded mode (see also alignAgentModeToTier for native delegation).
+    const action = decidePermission(s.permissionTier, req.toolCall, s.cwd);
+    if (action !== 'prompt') {
+      const optionId = pickOption(req.options, action);
+      if (optionId) {
+        this.client.resolvePermission(req.requestId, { outcome: 'selected', optionId });
         return;
       }
+      // No option of the decided kind offered — fall back to prompting rather
+      // than guessing, so we never silently do the opposite of the tier.
     }
     s.permission = req;
     // The agent is now blocked on the user, not on disk — a held steer can fire.
@@ -4510,8 +4548,9 @@ export class DevaiAgents extends LitElement {
     const approved = !!(s?.permission && outcome?.outcome === 'selected' &&
       s.permission.options.find((o) => o.optionId === outcome.optionId)?.kind.startsWith('allow'));
     if (s) { s.permission = null; this.touch(); }
-    // First manual approval with auto-accept off → tempt them toward it, once ever.
-    if (s && approved && !s.autoAccept && !autoAcceptHintSeen()) {
+    // First manual approval while still on the Ask tier → tempt them toward more
+    // autonomy, once ever.
+    if (s && approved && s.permissionTier === 'ask' && !autoAcceptHintSeen()) {
       this.showAutoAcceptHint = true;
     }
   }
@@ -4523,30 +4562,53 @@ export class DevaiAgents extends LitElement {
     if (s) { s.elicitation = null; this.touch(); }
   }
 
-  // Auto-accept: future permission requests resolve immediately with the first
-  // `allow_*` option. Toggling it on while a request is already pending clears
-  // that pending modal too, so the user doesn't have to dismiss it manually.
-  private toggleAutoAccept() {
+  // Change the active session's permission tier. Persists it as the new default,
+  // aligns the connected agent's native `mode` where it offers one (so the agent
+  // stops emitting requests we'd only rubber-stamp — client interception remains
+  // the fallback for agents without a guarded mode), and, if a request is already
+  // pending, re-evaluates it against the new tier so the user needn't dismiss it.
+  private setPermissionTier(tier: PermissionTier) {
     const s = this.current;
-    if (!s) return;
-    s.autoAccept = !s.autoAccept;
-    saveAutoAccept(s.autoAccept);
-    if (s.autoAccept && s.permission) {
-      const pick = s.permission.options.find((o) => o.kind.startsWith('allow'));
-      if (pick) {
-        this.client.resolvePermission(s.permission.requestId, { outcome: 'selected', optionId: pick.optionId });
-        s.permission = null;
+    if (!s || s.permissionTier === tier) { this.permissionMenuOpen = false; return; }
+    s.permissionTier = tier;
+    savePermissionTier(tier);
+    this.permissionMenuOpen = false;
+    this.alignAgentModeToTier(s, tier);
+    // Re-decide any pending request under the new tier.
+    if (s.permission) {
+      const action = decidePermission(tier, s.permission.toolCall, s.cwd);
+      if (action !== 'prompt') {
+        const optionId = pickOption(s.permission.options, action);
+        if (optionId) {
+          this.client.resolvePermission(s.permission.requestId, { outcome: 'selected', optionId });
+          s.permission = null;
+        }
       }
     }
-    // Interacting with the toggle retires the nudge for good.
+    // Interacting with the control retires the nudge for good.
     if (this.showAutoAcceptHint) { this.showAutoAcceptHint = false; markAutoAcceptHintSeen(); }
     this.touch();
   }
 
-  // "Turn on" from the nudge: enable auto-accept (only if off) and retire the hint.
+  // Where the connected agent exposes a native guarded `mode` config option
+  // (Claude Code: default/acceptEdits/plan/bypassPermissions), delegate to it so
+  // the agent itself enforces the tier. Graceful degradation: if the mapped
+  // value isn't offered (heterogeneous agents), we leave the mode alone and rely
+  // solely on client-side interception in onPermissionRequest.
+  private alignAgentModeToTier(s: AgentSession, tier: PermissionTier) {
+    const target = tierToAgentMode(tier);
+    if (!target) return;
+    const modeOption = s.configOptions.find((o) => o.category === 'mode');
+    if (!modeOption) return;
+    const offered = this.configLeaves(modeOption).some((leaf) => leaf.value === target);
+    if (!offered || modeOption.currentValue === target) return;
+    this.sendConfigChange(s, modeOption.id, target);
+  }
+
+  // "Turn on" from the nudge: step up to the guarded Auto tier and retire the hint.
   private enableAutoAcceptFromHint() {
     const s = this.current;
-    if (s && !s.autoAccept) this.toggleAutoAccept();
+    if (s && s.permissionTier === 'ask') this.setPermissionTier('auto');
     else { this.showAutoAcceptHint = false; markAutoAcceptHintSeen(); this.touch(); }
   }
 
@@ -4554,6 +4616,80 @@ export class DevaiAgents extends LitElement {
     this.showAutoAcceptHint = false;
     markAutoAcceptHintSeen();
     this.touch();
+  }
+
+  private togglePermissionMenu() {
+    document.removeEventListener('click', this.closePermissionMenu);
+    if (this.permissionMenuOpen) { this.permissionMenuOpen = false; return; }
+    this.permissionMenuOpen = true;
+    this.configMenuId = null;
+    this.slashOpen = false;
+    requestAnimationFrame(() => {
+      document.addEventListener('click', this.closePermissionMenu, { once: true });
+    });
+  }
+
+  private closePermissionMenu = () => {
+    this.permissionMenuOpen = false;
+  };
+
+  // The header permission-tier control: a single trigger showing the active tier
+  // (Plan/Ask/Auto/Full auto) that opens a picker of all four. Replaces the old
+  // boolean Auto-accept toggle — see services/permission-policy.ts for the model.
+  private renderPermissionControl(s: AgentSession) {
+    const meta = PERMISSION_TIER_META[s.permissionTier];
+    const open = this.permissionMenuOpen;
+    return html`
+      <div class="auto-accept-wrap perm-ctl">
+        <button
+          class="icon-btn perm-trigger tier-${s.permissionTier} ${open ? 'open' : ''}"
+          aria-haspopup="listbox"
+          aria-expanded=${open}
+          @click=${(e: Event) => { e.stopPropagation(); this.togglePermissionMenu(); }}
+          ${tooltip(`Permission mode: ${meta.label}. ${meta.hint}`)}
+          aria-label=${`Permission mode: ${meta.label}`}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 1.5 2.5 3.8v3.4c0 3.2 2.3 5.6 5.5 6.8 3.2-1.2 5.5-3.6 5.5-6.8V3.8L8 1.5Z"/>
+            ${s.permissionTier === 'plan'
+              ? html`<path d="M6 8h4M6 5.5h4M6 10.5h2.5"/>`
+              : html`<path d="M5.8 7.8 7.3 9.3 10.4 6"/>`}
+          </svg>
+          <span class="btn-label">${meta.label}</span>
+          <svg class="caret" viewBox="0 0 12 12" fill="none"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        ${open ? html`
+          <div class="config-menu perm-menu" role="listbox" aria-label="Permission mode">
+            ${PERMISSION_TIERS.map((tier) => {
+              const m = PERMISSION_TIER_META[tier];
+              const sel = tier === s.permissionTier;
+              return html`<button
+                class="config-item ${sel ? 'active' : ''}"
+                role="option"
+                aria-selected=${sel}
+                @mousedown=${(e: Event) => { e.preventDefault(); this.setPermissionTier(tier); }}
+              >
+                <span class="config-check">${sel ? '✓' : ''}</span>
+                <span class="config-item-body">
+                  <span class="config-item-name">${m.label}</span>
+                  <span class="config-item-desc">${m.hint}</span>
+                </span>
+              </button>`;
+            })}
+          </div>` : nothing}
+        ${this.showAutoAcceptHint ? html`
+          <div class="auto-accept-hint" role="status">
+            <div class="aah-body">
+              <strong>Tired of clicking Allow?</strong>
+              <span>Switch to Auto (guarded) and let the agent run reads, edits, and safe commands on its own — risky actions still ask.</span>
+            </div>
+            <div class="aah-actions">
+              <button class="aah-enable" @click=${this.enableAutoAcceptFromHint}>Switch to Auto</button>
+              <button class="aah-dismiss" @click=${this.dismissAutoAcceptHint} ${tooltip('Dismiss')} aria-label="Dismiss">${icon.close(14)}</button>
+            </div>
+          </div>` : nothing}
+      </div>
+    `;
   }
 
   // Mode, model, and effort controls all flow through the same config-option
@@ -4612,6 +4748,7 @@ export class DevaiAgents extends LitElement {
     this.configMenuId = o.id;
     this.slashOpen = false;
     this.slashButtonOpen = false;
+    this.permissionMenuOpen = false;
     this.configMenuIndex = Math.max(0, this.configLeaves(o).findIndex((l) => l.value === o.currentValue));
     requestAnimationFrame(() => {
       document.addEventListener('click', this.closeConfigMenu, { once: true });
@@ -5919,34 +6056,7 @@ export class DevaiAgents extends LitElement {
           </button>
         </div>
         <div class="session-actions">
-          <div class="auto-accept-wrap">
-          <button
-            class="icon-btn auto-accept-btn ${s.autoAccept ? 'on' : ''}"
-            @click=${this.toggleAutoAccept}
-            ${tooltip(s.autoAccept
-              ? 'Auto-accept is on — permission prompts resolve automatically. Click to turn off. Best left on only for work you can safely let the agent run unattended.'
-              : 'Turn on to auto-accept tool permission prompts for this session. Enable case by case — for tasks where you’re fine letting the agent act without review.')}
-            aria-label=${s.autoAccept ? 'Auto-accept on' : 'Auto-accept off'}
-            aria-pressed=${s.autoAccept}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M8 1.5 2.5 3.8v3.4c0 3.2 2.3 5.6 5.5 6.8 3.2-1.2 5.5-3.6 5.5-6.8V3.8L8 1.5Z"/>
-              <path d="M5.8 7.8 7.3 9.3 10.4 6"/>
-            </svg>
-            <span class="btn-label">Auto-accept</span>
-          </button>
-          ${this.showAutoAcceptHint ? html`
-            <div class="auto-accept-hint" role="status">
-              <div class="aah-body">
-                <strong>Tired of clicking Allow?</strong>
-                <span>Turn on Auto-accept and let the agent cook — permission prompts resolve automatically.</span>
-              </div>
-              <div class="aah-actions">
-                <button class="aah-enable" @click=${this.enableAutoAcceptFromHint}>Turn on</button>
-                <button class="aah-dismiss" @click=${this.dismissAutoAcceptHint} ${tooltip('Dismiss')} aria-label="Dismiss">${icon.close(14)}</button>
-              </div>
-            </div>` : nothing}
-          </div>
+          ${this.renderPermissionControl(s)}
           <copy-button
             class="copy-all-btn"
             label="Copy all"

@@ -773,7 +773,13 @@ export type SavedConfig = Record<string, string>;
 export interface AgentPrefs {
   lastCwd: string;
   lastAgent: string;
+  /** @deprecated Superseded by `permissionTier`. Kept so older on-disk configs
+   *  migrate cleanly (a stored `true` becomes 'full-auto'). Still mirrored on
+   *  write for back-compat with any reader that predates the tier field. */
   autoAccept: boolean;
+  /** Default permission autonomy for new sessions: 'plan' | 'ask' | 'auto' |
+   *  'full-auto'. Absent on legacy configs (fall back via autoAccept). */
+  permissionTier?: string;
   savedConfigs: Record<string, SavedConfig>;
 }
 

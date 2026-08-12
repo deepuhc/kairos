@@ -24,6 +24,7 @@ export interface InflightPrompt {
 }
 import type { ElicitationRequest, PermissionRequest } from './acp.js';
 import type { Checkpoint, SessionEntry } from './api.js';
+import { DEFAULT_PERMISSION_TIER, type PermissionTier } from './permission-policy.js';
 
 // Per-session phase. Connection-level states (connecting/error) live on the view.
 export type SessionPhase = 'ready' | 'thinking' | 'error';
@@ -106,8 +107,11 @@ export interface AgentSession {
   replayedToolIds: Set<string>;
   /** Title is still a placeholder; replace it with the first user message. */
   autoTitle: boolean;
-  /** Auto-resolve permission requests with the first `allow_*` option. */
-  autoAccept: boolean;
+  /** How much autonomy the agent has over permission prompts this session:
+   *  'plan' (read-only) · 'ask' (prompt always, default) · 'auto' (guarded
+   *  auto-allow, prompt on risk) · 'full-auto' (allow all but the danger floor).
+   *  See services/permission-policy.ts. */
+  permissionTier: PermissionTier;
   /** Set when this session runs in an app-created git worktree (provenance for cleanup). */
   worktree?: { worktreePath: string; branch: string; repoRoot: string };
   /** Agent-authored markdown summary of this session's changes, once requested (Summary panel). */
@@ -170,7 +174,7 @@ export function createAgentSession(id: string, cwd: string, opts: Partial<AgentS
     loading: false,
     replayedToolIds: new Set(),
     autoTitle: true,
-    autoAccept: false,
+    permissionTier: DEFAULT_PERMISSION_TIER,
     checkpoints: [],
     ...opts,
   };

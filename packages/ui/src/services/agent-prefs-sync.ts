@@ -19,14 +19,24 @@ import {
   getAgentPrefs, saveAgentPrefs, getPrompts, createPrompt,
   type AgentPrefs, type SavedConfig,
 } from './api.js';
+import {
+  DEFAULT_PERMISSION_TIER, PERMISSION_TIERS, tierFromLegacyAutoAccept,
+  tierImpliesAutoAccept, type PermissionTier,
+} from './permission-policy.js';
 import { promptId } from './prompt-util.js';
 
 // Keys owned here (mirror the constants in agents-view.ts).
 const LAST_CWD_KEY = 'kairos-agents:last-cwd';
 const LAST_AGENT_KEY = 'kairos-agents:last-agent';
 const AUTO_ACCEPT_KEY = 'kairos-agents:auto-accept';
+// Default permission tier for new sessions (supersedes the boolean AUTO_ACCEPT_KEY).
+const PERMISSION_TIER_KEY = 'kairos-agents:permission-tier';
 const CONFIG_KEY_PREFIX = 'kairos-agents:config:';
 const PROMPTS_KEY = 'kairos-agents:prompts';
+
+function asTier(v: string | null | undefined): PermissionTier | null {
+  return v && (PERMISSION_TIERS as string[]).includes(v) ? (v as PermissionTier) : null;
+}
 
 // One-time migration guards.
 const MIGRATED_PREFS_FLAG = 'kairos-agents:migrated-prefs';
@@ -70,10 +80,14 @@ function readLocalPrefs(): AgentPrefs {
       }
     }
   } catch { /* localStorage unavailable */ }
+  // Prefer the tier key; fall back to the legacy boolean if only that exists.
+  const tier = asTier(lsGet(PERMISSION_TIER_KEY))
+    ?? tierFromLegacyAutoAccept(lsGet(AUTO_ACCEPT_KEY) === '1');
   return {
     lastCwd: lsGet(LAST_CWD_KEY) ?? '',
     lastAgent: lsGet(LAST_AGENT_KEY) ?? '',
-    autoAccept: lsGet(AUTO_ACCEPT_KEY) === '1',
+    autoAccept: tierImpliesAutoAccept(tier),
+    permissionTier: tier,
     savedConfigs,
   };
 }
@@ -83,14 +97,19 @@ function readLocalPrefs(): AgentPrefs {
 function writeLocalPrefs(prefs: AgentPrefs): void {
   lsSet(LAST_CWD_KEY, prefs.lastCwd);
   if (prefs.lastAgent) lsSet(LAST_AGENT_KEY, prefs.lastAgent);
-  lsSet(AUTO_ACCEPT_KEY, prefs.autoAccept ? '1' : '0');
+  // Tier is authoritative; derive it from the legacy boolean if the disk
+  // config predates the field. Mirror the boolean too for back-compat.
+  const tier = asTier(prefs.permissionTier) ?? tierFromLegacyAutoAccept(prefs.autoAccept);
+  lsSet(PERMISSION_TIER_KEY, tier);
+  lsSet(AUTO_ACCEPT_KEY, tierImpliesAutoAccept(tier) ? '1' : '0');
   for (const [agentId, config] of Object.entries(prefs.savedConfigs)) {
     lsSet(CONFIG_KEY_PREFIX + agentId, JSON.stringify(config));
   }
 }
 
 function prefsAreEmpty(p: AgentPrefs): boolean {
-  return !p.lastCwd && !p.lastAgent && !p.autoAccept
+  const tier = asTier(p.permissionTier) ?? tierFromLegacyAutoAccept(p.autoAccept);
+  return !p.lastCwd && !p.lastAgent && tier === DEFAULT_PERMISSION_TIER
     && Object.keys(p.savedConfigs).length === 0;
 }
 

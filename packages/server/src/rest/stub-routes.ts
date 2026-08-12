@@ -45,7 +45,7 @@ const READ_STUBS: Record<string, Handler> = {
   '/agents/hooks': (_q, r) => r.json({ hooks: [] }),
   '/agents/custom': (_q, r) => r.json({ agents: [] }),
   '/agents/prefs': (_q, r) => r.json({
-    prefs: { lastCwd: '', lastAgent: '', autoAccept: false, savedConfigs: {} },
+    prefs: { lastCwd: '', lastAgent: '', autoAccept: false, permissionTier: 'ask', savedConfigs: {} },
   }),
   '/workspaces': (_q, r) => r.json({ workspaces: [], config: {}, warnings: [], sortBy: 'recent' }),
   '/sessions': (_q, r) => r.json({ sessions: [] }),
