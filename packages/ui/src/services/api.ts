@@ -898,3 +898,44 @@ export const postTestimonial = (note: string) =>
     method: 'POST',
     body: JSON.stringify({ note }),
   });
+
+// Autonomous orchestrator activity view (read-only). Mirrors the server shapes
+// in packages/server/src/orchestrator/state.ts and rest/orchestrator-routes.ts.
+export type OrchestratorPhaseStatus = 'pending' | 'ready' | 'running' | 'blocked' | 'done';
+export type OrchestratorLiveness = 'ok' | 'soft-stall' | 'stalled' | 'timeout';
+export type OrchestratorRunStatus = 'idle' | 'running' | 'blocked' | 'done' | 'failed';
+
+export interface OrchestratorPhase {
+  role: string;
+  status: OrchestratorPhaseStatus;
+  sessionId?: string;
+  artifact: string;
+  lastActivityAt?: number;
+  liveness?: OrchestratorLiveness;
+  attempts: number;
+  blockedReason?: string;
+}
+export interface OrchestratorRunState {
+  runId: string;
+  goal: string;
+  status: OrchestratorRunStatus;
+  phases: OrchestratorPhase[];
+  startedAt: number;
+  updatedAt: number;
+  seq: number;
+}
+export interface OrchestratorRole {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  modelTier: 'frontier' | 'mid' | 'cheap';
+  dependsOn: string[];
+  supervisorRole: boolean;
+  artifact: { path: string; label: string };
+}
+
+export const getOrchestratorState = () =>
+  request<OrchestratorRunState>('/orchestrator/state');
+export const getOrchestratorRoles = () =>
+  request<{ roles: OrchestratorRole[] }>('/orchestrator/roles');

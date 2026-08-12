@@ -10,11 +10,11 @@ describe('app mode — nav tab gating', () => {
     expect(appSource).toContain('private getVisibleTabs(): View[]');
   });
 
-  it('developer mode shows all 7 tabs', () => {
+  it('developer mode shows all 8 tabs (incl. the orchestrator Activity view)', () => {
     const devMatch = appSource.match(/case 'developer':\s*return \[([^\]]+)\]/);
     expect(devMatch).not.toBeNull();
     const tabs = devMatch![1].split(',').map(s => s.trim().replace(/'/g, ''));
-    expect(tabs).toEqual(['agents', 'files', 'prompts', 'plan', 'review', 'customize', 'sessions']);
+    expect(tabs).toEqual(['agents', 'files', 'prompts', 'plan', 'review', 'activity', 'customize', 'sessions']);
   });
 
   it('professional mode shows 4 tabs (no plan, review, customize)', () => {

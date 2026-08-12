@@ -22,6 +22,7 @@ import { registerStubRoutes } from './rest/stub-routes.js';
 import { registerFileRoutes } from './rest/files-routes.js';
 import { registerSessionRoutes } from './rest/sessions-routes.js';
 import { registerOrchestratorRoutes } from './rest/orchestrator-routes.js';
+import { RunManager } from './orchestrator/run-manager.js';
 import { buildAgentCatalog } from './rest/agent-catalog.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
@@ -55,6 +56,16 @@ if (mockEnabled) {
 }
 const pool = new AgentPool();
 const pipelines = new Map<string, PipelineEngine>();
+
+// The `/events` fan-out bus — a one-way {event,data} publish stream the UI's
+// EventSocket consumes. Created here (before routes) so the orchestrator run
+// manager can publish `orchestrator:*` progress events onto it. Publish-only.
+const eventBus = new EventBus();
+
+// The autonomous delivery orchestrator: drives the persona pipeline to done via
+// the shared router, guarded by per-phase liveness watchdogs, publishing progress
+// on the event bus for the Activity view. Product path — no devai involved.
+const runManager = new RunManager({ router, events: eventBus });
 
 // --- REST API ---
 app.get('/api/health', (_req, res) => {
@@ -121,7 +132,7 @@ registerSessionRoutes(app);
 // Read-only orchestrator activity surface (GET /orchestrator/state|roles) for the
 // autonomous-delivery activity view. Reads ~/.kairos/orchestrator-state.json.
 // Mounted before the stubs so these win over the 501 catch-all.
-registerOrchestratorRoutes(app);
+registerOrchestratorRoutes(app, runManager);
 
 // Phase-C REST stubs: boot-critical GET defaults + a 501 { unsupported: true }
 // catch-all for every other /api route. Registered after the real /api routes
@@ -168,12 +179,6 @@ const acpServer = new AcpServer({
     return new StdioAcpAgent(new ChildProcessIo(spec, cwd));
   },
 });
-
-// The `/events` fan-out bus — a plain one-way {event,data} publish stream the
-// UI's EventSocket consumes (auth:changed, output:<id>, done:<id>, …). Without
-// a server-side endpoint the shipped UI would reconnect-loop this socket every
-// second forever. Publish-only; see events/bus.ts.
-const eventBus = new EventBus();
 
 // Central upgrade router: dispatch by path so /ws (hub) and /acp (ACP) coexist
 // on one http.Server. A noServer WSS per path — a path-bound WSS would destroy

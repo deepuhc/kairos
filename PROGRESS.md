@@ -16,8 +16,11 @@ Brief: `.omc/plans/feedback-5items-brief.md`.
 | 4 | Remove Frames feature | DONE | d009897 |
 | 1 | Top-nav Files & Prompts as global views | DONE | cf0d616 |
 | 2 | Tiered permission model | DONE | 0ae099d |
-| 3 | 7 personas + autonomous orchestrator | IN PROGRESS (backend, parallel) | — |
-| 5 | Orchestrator/subagent activity view | PENDING (depends on #3) | — |
+| 3 | 7 personas + autonomous orchestrator | DONE | 8a31f77, 522e356 |
+| 5 | Orchestrator/subagent activity view | DONE | 522e356 + finish increment |
+
+ALL 5 ITEMS DONE. Also fixed alongside: session rename/pin (55f20f0) — the /api/sessions/*
+mutation family had no real routes, so rename silently no-op'd.
 
 ## Decisions log
 - Sequencing: UI items (4→1→2) run serially since all edit `agents-view.ts`. Item 3
@@ -78,3 +81,32 @@ Brief: `.omc/plans/feedback-5items-brief.md`.
   residual (interpreter one-liners `node -e`/`python3 -c` auto-run under Auto) — closed by
   treating inline-code flags on interpreter heads as unsafe. Verified: build PASS (tsc -b
   clean), UI+server 442/442 pass. Committed 0ae099d.
+- Item 3 (7 personas + autonomous orchestrator): committed 8a31f77 (personas package:
+  7 team-role AgentRoles with systemPrompt/artifact-contract/DAG dependsOn + getAgentRole/
+  DEFAULT_PIPELINE_ROLES, agent-roles.test.ts 12 tests; server orchestrator: AgentWatchdog
+  on the ConnectionMonitor injectable-timer shape with layered heartbeat/start-to-close/
+  schedule-to-close + fingerprint soft-stall; dual-write state store under ~/.kairos via the
+  shared kairos-home helper) and 522e356 (Coordinator: pure SOP-DAG pipeline w/ artifact
+  gates + retry→block; RunManager: router-backed executeRole streaming each persona's
+  artifact to disk, watchdog-guarded per attempt, emitting orchestrator:* + _ext/stalled on
+  /events; read-only GET /orchestrator/state|roles). Product path only — router-backed, NO
+  devai. Single run at a time.
+- Follow-up done by team-lead (context handoff — feedback-orchestrator hit a context-length
+  limit mid-Item-3): fixed compile errors in the two uncommitted test files (TS18046
+  res.json()→readJson helper in orchestrator-routes.test.ts; threaded AgentRoleId through
+  run-manager.test.ts helpers). Also refactored session-overrides.ts onto the shared
+  kairos-home.js path resolver (single state home, KAIROS_HOME override, atomic temp+rename,
+  serialized mutate queue) so it and orchestrator state.json share one write discipline.
+- Item 5 (orchestrator/subagent activity view): committed within 522e356 + this finish
+  increment. New `kairos-activity` component (packages/ui/src/components/activity-view.ts):
+  renders the pipeline DAG + per-persona status/liveness from GET /orchestrator/state, live
+  via orchestrator:* events; static role catalog from GET /orchestrator/roles. Added an
+  `activity` top-nav tab (developer mode only) with icon; api.ts getOrchestratorState/Roles
+  clients + shared types. Read-only (POST /start registered server-side only when a
+  RunManager is present). app-mode-gating test updated 7→8 dev tabs.
+
+## Final verification (team-lead)
+- `npx tsc -b` — clean (exit 0).
+- Server + personas — 152 passed / 23 files.
+- UI — 345 passed / 46 files.
+- All 5 feedback items DONE; session-rename bug fixed alongside.

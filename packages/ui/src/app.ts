@@ -20,8 +20,9 @@ import './components/help-drawer.js';
 import './components/whats-new-panel.js';
 import './components/presence-pill.js';
 import './components/testimonials.js';
+import './components/activity-view.js';
 
-type View = 'agents' | 'files' | 'prompts' | 'plan' | 'review' | 'sessions' | 'customize' | 'settings';
+type View = 'agents' | 'files' | 'prompts' | 'plan' | 'review' | 'activity' | 'sessions' | 'customize' | 'settings';
 
 const TERMINAL_VIEWS = new Set<View>([]);
 const TESTIMONIAL_HINT_KEY = 'kairos:testimonial-hint-seen';
@@ -47,6 +48,7 @@ const VIEW_LABELS: Record<View, string> = {
   prompts: 'Prompts',
   plan: 'Plan',
   review: 'Review',
+  activity: 'Activity',
   sessions: 'History',
   customize: 'Customize',
   settings: 'Settings',
@@ -59,6 +61,7 @@ const NAV_ICONS: Record<View, ReturnType<typeof html>> = {
   prompts: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>`,
   plan: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
   review: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="m9 15 2 2 4-4"/></svg>`,
+  activity: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
   sessions: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   customize: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   settings: html`<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>`,
@@ -1102,7 +1105,7 @@ export class DevaiApp extends LitElement {
   private getVisibleTabs(): View[] {
     switch (this.appMode) {
       case 'developer':
-        return ['agents', 'files', 'prompts', 'plan', 'review', 'customize', 'sessions'];
+        return ['agents', 'files', 'prompts', 'plan', 'review', 'activity', 'customize', 'sessions'];
       case 'professional':
         return ['agents', 'files', 'prompts', 'sessions'];
       case 'kids':
@@ -1152,6 +1155,8 @@ export class DevaiApp extends LitElement {
         return html`<div class="placeholder-view"><h2>Plan</h2><p>View and edit DAG pipelines, execution plans, and orchestration graphs.</p></div>`;
       case 'review':
         return html`<div class="placeholder-view"><h2>Review</h2><p>Review code changes, document edits, spreadsheet updates, and email drafts suggested by agents.</p></div>`;
+      case 'activity':
+        return html`<kairos-activity></kairos-activity>`;
       case 'sessions':
         return html`<kairos-sessions @operation=${this.forwardToTerminal} @navigate=${(e: CustomEvent) => this.navigate(e.detail)} @resume-in-agents=${this.handleResumeInAgents} @search-with-agent=${this.handleSearchWithAgent}></kairos-sessions>`;
       case 'customize':
