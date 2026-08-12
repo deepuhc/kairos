@@ -21,6 +21,7 @@ import { EventBus } from './events/bus.js';
 import { registerStubRoutes } from './rest/stub-routes.js';
 import { registerFileRoutes } from './rest/files-routes.js';
 import { registerSessionRoutes } from './rest/sessions-routes.js';
+import { registerOrchestratorRoutes } from './rest/orchestrator-routes.js';
 import { buildAgentCatalog } from './rest/agent-catalog.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
@@ -116,6 +117,11 @@ registerFileRoutes(app);
 // ~/.kairos/session-overrides.json. Mounted before the stubs so these real
 // handlers win over the 501 catch-all that previously ate every /sessions POST.
 registerSessionRoutes(app);
+
+// Read-only orchestrator activity surface (GET /orchestrator/state|roles) for the
+// autonomous-delivery activity view. Reads ~/.kairos/orchestrator-state.json.
+// Mounted before the stubs so these win over the 501 catch-all.
+registerOrchestratorRoutes(app);
 
 // Phase-C REST stubs: boot-critical GET defaults + a 501 { unsupported: true }
 // catch-all for every other /api route. Registered after the real /api routes
