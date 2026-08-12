@@ -170,15 +170,17 @@ describe('agents view styles', () => {
   });
 
   it('adds a source-control panel for git-backed sessions', () => {
-    const filesRail = source.indexOf('aria-label="Browse files"');
     const sourceRail = source.indexOf('aria-label="Git changes"');
-    const promptsRail = source.indexOf('aria-label="Prompts"');
+    const planRail = source.indexOf('aria-label="Plan"');
 
-    expect(filesRail).toBeGreaterThan(-1);
-    expect(sourceRail).toBeGreaterThan(filesRail);
-    expect(promptsRail).toBeGreaterThan(sourceRail);
+    // Files and Prompts moved to global top-nav views; they no longer have rail
+    // buttons. Git leads the rail and precedes Plan.
+    expect(source).not.toContain('aria-label="Browse files"');
+    expect(source).not.toContain('aria-label="Prompts"');
+    expect(sourceRail).toBeGreaterThan(-1);
+    expect(planRail).toBeGreaterThan(sourceRail);
     expect(source).toContain("import './agents-source-control.js';");
-    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal';");
+    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'terminal';");
     expect(source).toContain('@state() private sourceOpen = false;');
     expect(source).toContain('private sourceStatusSummaries = new Map<string, SourceStatusSummary>();');
     expect(source).toContain("this.togglePanel('source')");
@@ -208,7 +210,7 @@ describe('agents view styles', () => {
   });
 
   it('stores right-panel selection and expanded state per session', () => {
-    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal';");
+    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'terminal';");
     expect(source).toContain('type SessionPanelState = { panel: PanelId; open: boolean };');
     expect(source).toContain('private sessionPanelStates = new Map<string, SessionPanelState>();');
     expect(source).toContain('private saveActivePanelState()');

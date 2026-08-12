@@ -213,7 +213,7 @@ const PANEL_WIDTH_DEFAULT = 440;
 const PANEL_CHAT_MIN = 260;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 200;
 const COMPOSER_TEXTAREA_RESIZE_EPSILON = 2;
-type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal';
+type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'terminal';
 type SessionPanelState = { panel: PanelId; open: boolean };
 const DEFAULT_SESSION_PANEL_STATE: SessionPanelState = { panel: 'files', open: false };
 
@@ -422,6 +422,13 @@ export class DevaiAgents extends LitElement {
   // live sessions survive navigating away. Toggling it off also halts voice
   // dictation — the mic shouldn't stay hot on a hidden tab.
   @property({ type: Boolean, reflect: true }) active = true;
+  // When the top-nav Files or Prompts tab is selected, the parent keeps this
+  // component mounted+active and sets globalPanel to render that panel as a
+  // full-page view bound to the ACTIVE session (this.current). Files/Prompts are
+  // session-scoped (a session's cwd / its own prompts), so the global views
+  // simply track whichever session is focused; with none, they show an empty
+  // state that routes back to Chat. null = normal session/connect/behind view.
+  @property({ attribute: false }) globalPanel: 'files' | 'prompts' | null = null;
   // Set by the parent when the user hits Resume in the Sessions tab or Dashboard.
   // A fresh SessionEntry reference each click; `updated` picks it up and replays
   // the session inline (with terminal fallback inside resumeAgentSession).
@@ -581,7 +588,6 @@ export class DevaiAgents extends LitElement {
   // Per-session "Plan" slide-over open state; mutually exclusive with the others.
   @state() private planOpen = false;
   // Per-session "Prompts" outline open state; mutually exclusive with the others.
-  @state() private promptsOpen = false;
   // Per-session "Terminal" shell open state; mutually exclusive with the others.
   @state() private terminalOpen = false;
   // Session whose terminal component should stay mounted while hidden/collapsed.
@@ -717,6 +723,9 @@ export class DevaiAgents extends LitElement {
        right (edge-to-edge, Cursor/Zed style). Chat content carries its own side
        breathing via the session bar / timeline / composer below. */
     .main { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
+    /* Global top-nav Files/Prompts view: the panel component fills .main and
+       carries its own internal scroll, matching the session side-panel layout. */
+    .global-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
     /* Fills the whole .main column so the Files/Review slide-overs (absolute
        inset:0 inside .session-body) span the full horizontal area. Chat prose
        keeps a reading measure via .timeline/.composer below; the session bar
@@ -4736,6 +4745,7 @@ export class DevaiAgents extends LitElement {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   render() {
+    if (this.globalPanel) return this.renderGlobalPanel(this.globalPanel);
     const s = this.current;
     const showBehind = this.view === 'behind';
     // The right side-panel only exists within a live session view (not the
@@ -4774,6 +4784,79 @@ export class DevaiAgents extends LitElement {
       ${this.renderRewindPicker()}
       ${this.renderResumePromptDialog()}
     `;
+  }
+
+  // Top-nav Files/Prompts as a global full-page view. Files and Prompts are
+  // session-scoped (a session's working directory / its own prompts), so the
+  // global view binds to the ACTIVE session and keeps the sidebar so switching
+  // sessions re-targets the panel. With no active session there's nothing to
+  // browse, so we show a graceful empty state that routes back to Chat.
+  private renderGlobalPanel(which: 'files' | 'prompts') {
+    const s = this.current;
+    const label = which === 'files' ? 'Files' : 'Prompts';
+    return html`
+      <div class="layout">
+        <agents-sidebar
+          .active=${this.activeSummaries()}
+          .previouslyOpen=${this.previouslyOpenEntries()}
+          .activeId=${this.activeId}
+          .lastCwd=${loadLastCwd()}
+          .lastAgentLabel=${this.lastAgentLabel()}
+          .rightPanelAvailable=${false}
+          .rightPanelOpen=${false}
+          .petMood=${this.petMood()}
+          ?developer-mode=${this.isDeveloperMode()}
+          @new-session=${() => this.goToChat(() => this.handleNewSession())}
+          @new-session-quick=${() => this.goToChat(() => this.handleQuickStart())}
+          @switch-session=${(e: CustomEvent) => this.switchTo(e.detail)}
+          @close-session=${(e: CustomEvent) => this.closeSession(e.detail)}
+          @resume-session=${(e: CustomEvent) => this.goToChat(() => this.resumeAgentSession(e.detail))}
+          @rename-session=${(e: CustomEvent) => this.handleRenameSession(e.detail)}
+          @reorder-active-sessions=${(e: CustomEvent) => this.handleReorderActiveSessions(e.detail)}
+          @show-behind-scenes=${() => this.goToChat(() => this.handleShowBehindScenes())}
+        ></agents-sidebar>
+        <div class="main">
+          <div class="global-panel">
+            ${s
+              ? which === 'files'
+                ? html`<agents-file-tree
+                    .session=${s}
+                    .selectedPathRequest=${this.linkedFileRequest}
+                    .fullBleed=${true}
+                  ></agents-file-tree>`
+                : html`<agents-prompts
+                    .session=${s}
+                    .fullBleed=${true}
+                    @jump-to-item=${(e: CustomEvent<{ id: string }>) => this.handleGlobalPromptJump(s, e.detail.id)}
+                  ></agents-prompts>`
+              : html`
+                <div class="empty-session">
+                  <span class="lead">No active session</span>
+                  <span class="sub">${label} track the session you're working in. Start or open a session to browse its ${which === 'files' ? 'working directory' : 'prompts'}.</span>
+                  <div class="suggest">
+                    <button @click=${() => this.dispatchEvent(new CustomEvent('open-chat', { bubbles: true, composed: true }))}>Go to Chat</button>
+                  </div>
+                </div>`}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Sidebar actions that change the view (new session, resume, Behind the Scenes)
+  // are meaningless while the global Files/Prompts panel is showing — render()
+  // early-returns on globalPanel, so their internal view change would be invisible
+  // (a dead-end). Route to Chat first (the parent clears globalPanel), then run
+  // the action once we're back on the session view.
+  private goToChat(then?: () => void) {
+    this.dispatchEvent(new CustomEvent('open-chat', { bubbles: true, composed: true }));
+    if (then) requestAnimationFrame(() => then());
+  }
+
+  // A prompt row was clicked in the global Prompts view: route back to Chat and
+  // jump the timeline to that message once the session view is on screen.
+  private handleGlobalPromptJump(s: AgentSession, id: string) {
+    this.goToChat(() => this.jumpToItem(s, id));
   }
 
   // The `/rewind` picker: a TUI-parity list of the session's prompts. Picking one
@@ -5295,13 +5378,6 @@ export class DevaiAgents extends LitElement {
                 @close=${this.closePanel}
               ></agents-plan>
             ` : nothing}
-            ${this.promptsOpen ? html`
-              <agents-prompts
-                .session=${s}
-                @jump-to-item=${(e: CustomEvent<{ id: string }>) => this.jumpToItem(s, e.detail.id)}
-                @close=${this.closePanel}
-              ></agents-prompts>
-            ` : nothing}
             ${this.treeOpen ? html`
               <agents-file-tree
                 .session=${s}
@@ -5352,7 +5428,6 @@ export class DevaiAgents extends LitElement {
       : which === 'review' ? !this.reviewOpen
       : which === 'summary' ? !this.summaryOpen
       : which === 'plan' ? !this.planOpen
-      : which === 'prompts' ? !this.promptsOpen
       : !this.terminalOpen;
     this.applyPanelState(this.activeId, { panel: which, open });
     if (which === 'source' && open) this.refreshSourceStatus(this.current, true);
@@ -5392,7 +5467,6 @@ export class DevaiAgents extends LitElement {
     this.reviewOpen = state.open && state.panel === 'review';
     this.summaryOpen = state.open && state.panel === 'summary';
     this.planOpen = state.open && state.panel === 'plan';
-    this.promptsOpen = state.open && state.panel === 'prompts';
     this.terminalOpen = state.open && state.panel === 'terminal';
 
     if (sessionId) {
@@ -5500,29 +5574,16 @@ export class DevaiAgents extends LitElement {
     this.handleSummary(s);
   }
 
-  // Vertical rail on the far right holding the Files/Source/Prompts/Plan/Review/
-  // Summary/Terminal toggles. Each button expands the side-panel to its left (or
-  // collapses it if active).
+  // Vertical rail on the far right holding the Git/Plan/Review/Summary/Terminal
+  // toggles. (Files and Prompts moved to global top-nav views.) Each button
+  // expands the side-panel to its left (or collapses it if active).
   private renderPanelRail(s: AgentSession) {
     const changedFiles = countSessionChangedFiles(s.items, s.itemsVersion);
     const planDone = s.plan.filter((e) => e.status === 'completed').length;
-    const promptCount = this.promptMessages(s).length;
     const sourceSummary = this.sourceStatusSummaries.get(s.id);
     const sourceAvailable = this.sourceOpen || sourceSummary?.loading || sourceSummary?.isRepo;
     return html`
       <nav class="panel-rail" aria-label="Session panels">
-        <button
-          class="rail-btn ${this.treeOpen ? 'on' : ''}"
-          @click=${() => this.togglePanel('files')}
-          aria-pressed=${this.treeOpen}
-          ${tooltip({ content: 'Browse and preview files in this session’s working directory', prefer: 'left' })}
-          aria-label="Browse files"
-        >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 4.5A1 1 0 0 1 3 3.5h3.1a1 1 0 0 1 .7.3l.9.9a1 1 0 0 0 .7.3H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z"/>
-          </svg>
-          <span class="rail-label">Files</span>
-        </button>
         ${sourceAvailable ? html`
           <button
             class="rail-btn ${this.sourceOpen ? 'on' : ''}"
@@ -5541,20 +5602,6 @@ export class DevaiAgents extends LitElement {
             ${sourceSummary?.changes ? html`<span class="review-count">${sourceSummary.changes}</span>` : sourceSummary?.loading ? html`<span class="rail-dot"></span>` : nothing}
           </button>
         ` : nothing}
-        <button
-          class="rail-btn ${this.promptsOpen ? 'on' : ''}"
-          @click=${() => this.togglePanel('prompts')}
-          aria-pressed=${this.promptsOpen}
-          ${tooltip({ content: 'Jump back to any prompt you sent this session', prefer: 'left' })}
-          aria-label="Prompts"
-        >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2.5 3.5A1 1 0 0 1 3.5 2.5h9a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1H6l-3 2.5V11H3.5a1 1 0 0 1-1-1Z"/>
-            <path d="M5 5.5h6M5 8h4"/>
-          </svg>
-          <span class="rail-label">Prompts</span>
-          ${promptCount ? html`<span class="review-count">${promptCount}</span>` : nothing}
-        </button>
         <button
           class="rail-btn ${this.planOpen ? 'on' : ''}"
           @click=${() => this.togglePanel('plan')}
@@ -5618,7 +5665,7 @@ export class DevaiAgents extends LitElement {
   }
 
   private get panelOpen(): boolean {
-    return this.reviewOpen || this.treeOpen || this.sourceOpen || this.summaryOpen || this.planOpen || this.promptsOpen || this.terminalOpen;
+    return this.reviewOpen || this.treeOpen || this.sourceOpen || this.summaryOpen || this.planOpen || this.terminalOpen;
   }
 
   private terminateRemovedSessionTerminals(previous?: AgentSession[]) {

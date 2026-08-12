@@ -13,8 +13,8 @@ Brief: `.omc/plans/feedback-5items-brief.md`.
 
 | # | Item | Status | Commit |
 |---|------|--------|--------|
-| 4 | Remove Frames feature | DONE | (see commit below) |
-| 1 | Top-nav Files & Prompts as global views | PENDING | — |
+| 4 | Remove Frames feature | DONE | d009897 |
+| 1 | Top-nav Files & Prompts as global views | DONE | (see commit below) |
 | 2 | Tiered permission model | PENDING | — |
 | 3 | 7 personas + autonomous orchestrator | IN PROGRESS (backend, parallel) | — |
 | 5 | Orchestrator/subagent activity view | PENDING (depends on #3) | — |
@@ -41,4 +41,16 @@ Brief: `.omc/plans/feedback-5items-brief.md`.
   arms; adjusted Behind-the-Scenes prose (removed "Watch it live" section, nav entry,
   hero clause, FEATURE_TIP, stale comments); updated agents-view-style.test.ts PanelId
   assertions. code-reviewer flagged 2 major prose leftovers + 2 stale comments — all fixed.
-  Verified: build PASS, UI 314/314 pass. Committing.
+  Verified: build PASS, UI 314/314 pass. Committed d009897.
+- Item 1 (top-nav Files & Prompts as global views): added `globalPanel` property to
+  kairos-agents; render() early-returns a full-page panel (agents-file-tree /
+  agents-prompts, new `fullBleed` prop hides the side-panel close button) bound to the
+  ACTIVE session, with a "No active session → Go to Chat" empty state. app.ts keeps
+  kairos-agents mounted+active for views agents|files|prompts (new `agentsHosted`
+  getter), passes globalPanel, handles new `open-chat` event → navigate('agents');
+  removed the placeholder Files/Prompts cards. Removed Files & Prompts buttons from the
+  right rail. Pruned now-dead promptsOpen plumbing + 'prompts' PanelId member (the
+  in-session Files side panel via openLinkedFile stays). Decision: switching sessions in
+  the global view re-targets the panel (intended); new-session/resume/behind-scenes route
+  through goToChat() first so they aren't dead-ends. code-reviewer flagged the dead-end
+  MAJOR + dead promptsOpen MINOR — both fixed. Verified: build PASS, UI 314/314. Committing.

@@ -67,6 +67,9 @@ function saveTreeWidth(px: number) {
 export class AgentsFileTree extends LitElement {
   @property({ attribute: false }) session!: AgentSession;
   @property({ attribute: false }) selectedPathRequest: SelectedPathRequest | null = null;
+  // Rendered as a full-page global view (top-nav Files) rather than the session
+  // side panel: hide the panel close button, which has no meaning full-bleed.
+  @property({ type: Boolean }) fullBleed = false;
 
   // Fetched directory contents, keyed by relative dir path ('' = root).
   @state() private dirCache = new Map<string, DirEntry[]>();
@@ -422,7 +425,7 @@ export class AgentsFileTree extends LitElement {
       <div class="head">
         <h2>Files</h2>
         <span class="cwd" ${tooltip(this.sessionWorkdir())}>${this.sessionWorkdir()}</span>
-        <button class="close" ${tooltip('Close files')} @click=${() => this.close()}>${icon.close(15)}</button>
+        ${this.fullBleed ? nothing : html`<button class="close" ${tooltip('Close files')} @click=${() => this.close()}>${icon.close(15)}</button>`}
       </div>
       <div class="body">
         <div class="tree" style="width:${this.treeWidth}px">

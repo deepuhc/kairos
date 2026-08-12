@@ -18,6 +18,9 @@ function formatClock(ts: number): string {
 @customElement('agents-prompts')
 export class AgentsPrompts extends LitElement {
   @property({ attribute: false }) session!: AgentSession;
+  // Rendered as a full-page global view (top-nav Prompts) rather than the
+  // session side panel: hide the panel close button.
+  @property({ type: Boolean }) fullBleed = false;
 
   static styles = css`
     :host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -129,7 +132,7 @@ export class AgentsPrompts extends LitElement {
       <div class="head">
         <h2>Prompts</h2>
         ${prompts.length > 0 ? html`<span class="count">${prompts.length}</span>` : nothing}
-        <button class="close" ${tooltip('Close prompts')} @click=${() => this.dispatchEvent(new CustomEvent('close', { bubbles: true, composed: true }))}>${icon.close(18)}</button>
+        ${this.fullBleed ? nothing : html`<button class="close" ${tooltip('Close prompts')} @click=${() => this.dispatchEvent(new CustomEvent('close', { bubbles: true, composed: true }))}>${icon.close(18)}</button>`}
       </div>
       <div class="scroll">
         ${prompts.length > 0

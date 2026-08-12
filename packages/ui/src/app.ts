@@ -984,8 +984,16 @@ export class DevaiApp extends LitElement {
     import('./components/agents-view.js');
   }
 
+  // Views served by the always-mounted kairos-agents component: the Agents tab
+  // itself plus the global Files/Prompts views, which render session-scoped
+  // panels bound to the active session. All keep the live-agent component
+  // visible so its ACP sockets/subprocesses survive.
+  private get agentsHosted(): boolean {
+    return this.view === 'agents' || this.view === 'files' || this.view === 'prompts';
+  }
+
   private navigate(view: View) {
-    if (view === 'agents') this.loadAgents();
+    if (view === 'agents' || view === 'files' || view === 'prompts') this.loadAgents();
     this.view = view;
   }
 
@@ -1138,10 +1146,8 @@ export class DevaiApp extends LitElement {
 
   private renderView() {
     switch (this.view) {
-      case 'files':
-        return html`<div class="placeholder-view"><h2>Files</h2><p>Browse and manage project files, workspace trees, and git worktrees.</p></div>`;
-      case 'prompts':
-        return html`<div class="placeholder-view"><h2>Prompts</h2><p>Manage prompt templates, system instructions, and reusable agent configurations.</p></div>`;
+      // 'files' and 'prompts' are served by the always-mounted kairos-agents
+      // component (see agentsHosted), not this wrapper.
       case 'plan':
         return html`<div class="placeholder-view"><h2>Plan</h2><p>View and edit DAG pipelines, execution plans, and orchestration graphs.</p></div>`;
       case 'review':
@@ -1171,13 +1177,14 @@ export class DevaiApp extends LitElement {
           </button>
         </div>
       ` : ''}
-      <main class=${this.view === 'agents' ? 'full-bleed' : ''}>
-        ${this.agentsEverVisited ? html`<kairos-agents .active=${this.view === 'agents'} .resumeEntry=${this.resumeEntry} .startRequest=${this.startRequest} .searchRequest=${this.searchRequest} @open-history=${() => this.navigate('sessions')}></kairos-agents>` : ''}
-        ${this.view !== 'agents'
+      <main class=${this.agentsHosted ? 'full-bleed' : ''}>
+        ${this.agentsEverVisited ? html`<kairos-agents .active=${this.agentsHosted} .globalPanel=${this.view === 'files' ? 'files' : this.view === 'prompts' ? 'prompts' : null} .resumeEntry=${this.resumeEntry} .startRequest=${this.startRequest} .searchRequest=${this.searchRequest} @open-history=${() => this.navigate('sessions')} @open-chat=${() => this.navigate('agents')}></kairos-agents>` : ''}
+        ${!this.agentsHosted
           ? // keyed() forces Lit to recreate this wrapper when the view changes,
             // so the .view-enter entrance animation replays on every nav switch.
-            // The Agents view is intentionally kept OUTSIDE this wrapper — it must
-            // stay mounted or its live ACP sockets/subprocesses die.
+            // The Agents view (and the global Files/Prompts views it hosts) is
+            // intentionally kept OUTSIDE this wrapper — it must stay mounted or
+            // its live ACP sockets/subprocesses die.
             keyed(this.view, html`<div class="view-enter">${this.renderView()}</div>`)
           : ''}
       </main>
