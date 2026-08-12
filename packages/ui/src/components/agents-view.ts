@@ -49,7 +49,6 @@ import './agents-plan.js';
 import './agents-prompts.js';
 import './agents-file-tree.js';
 import './agents-source-control.js';
-import './agents-frames.js';
 import './agents-terminal.js';
 import './agents-elicitation.js';
 import './agents-sidebar.js';
@@ -62,7 +61,6 @@ import './status-indicator.js';
 import './copy-button.js';
 import { serializeTimeline } from '../services/transcript.js';
 import type { ActiveSessionSummary } from './agents-sidebar.js';
-import { elideLargeData, type CapturedFrame, type FrameChannel } from '../services/acp-frames.js';
 import { notify, clearNotification } from '../services/notify.js';
 import { tooltip } from '../directives/tooltip.js';
 
@@ -144,15 +142,9 @@ const FEATURE_TIPS: string[] = [
   'Reopen a past chat from Recent and it replays right where you left off.',
   'Prefer your own API key? Toggle it per agent in the New-session picker.',
   'Press ? anywhere to open the help guide.',
-  'Open the Frames panel to watch the raw ACP protocol as it streams.',
   'Wire up an MCP server in Customize and it loads into every new session.',
 ];
 const TIP_INDEX_KEY = 'kairos-agents:tip-index';
-
-// Cap the live-inspector buffer so a long-running agent doesn't bloat memory.
-// ~60 keeps a couple of turns of context visible even when each turn fans out
-// into many tool calls.
-const FRAME_LOG_CAP = 60;
 
 // Bottom-anchored timeline window (see timelineWindow). Render the last
 // TIMELINE_WINDOW items by default; "Show earlier" reveals TIMELINE_WINDOW_STEP
@@ -221,7 +213,7 @@ const PANEL_WIDTH_DEFAULT = 440;
 const PANEL_CHAT_MIN = 260;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 200;
 const COMPOSER_TEXTAREA_RESIZE_EPSILON = 2;
-type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal' | 'frames';
+type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal';
 type SessionPanelState = { panel: PanelId; open: boolean };
 const DEFAULT_SESSION_PANEL_STATE: SessionPanelState = { panel: 'files', open: false };
 
@@ -596,8 +588,6 @@ export class DevaiAgents extends LitElement {
   private terminalSessionId: string | null = null;
   // Sessions whose terminal has been lazily initialized at least once.
   private initializedTerminalIds = new Set<string>();
-  // Per-session "Frames" live ACP inspector open state; mutually exclusive.
-  @state() private framesOpen = false;
   // Which panel the layout-toolbar's right toggle reopens for the active session.
   private lastPanel: PanelId = 'files';
   // Per live session: selected side-panel and whether the panel is expanded.
@@ -624,16 +614,6 @@ export class DevaiAgents extends LitElement {
   // Customize tab edits them (the Agents tab stays mounted, so we refresh on
   // window focus / a broadcast rather than remount).
   @state() private prompts: PromptInput[] = [];
-  // Capped ring buffer of inbound ACP frames for the Behind the Scenes live
-  // inspector. Newest goes to the end; we trim from the front past FRAME_LOG_CAP.
-  // Deliberately NOT @state: frames are recorded on every ACP event (i.e. every
-  // streamed token), and marking this reactive would schedule a full top-level
-  // re-render per token even when the inspector is closed and nobody will ever
-  // see those frames — silently defeating touch()'s frame-coalescing. recordFrame
-  // only requests a render when the inspector is actually open (see below).
-  private frameLog: CapturedFrame[] = [];
-  // Monotonic id for stable list keys (avoids Date-based ids in render).
-  private frameSeq = 0;
   private speechSupported = typeof window !== 'undefined'
     && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   private recognition: any = null;
@@ -1516,18 +1496,6 @@ export class DevaiAgents extends LitElement {
     .rail-btn.on { color: var(--bright-white); background: var(--accent-a18); }
     .rail-btn svg { display: block; }
     .rail-label { font-size: 10px; font-weight: 600; letter-spacing: 0.02em; }
-    /* Divider setting the more behind-the-scenes "Frames" toggle apart from the
-       task-oriented panels above it. */
-    .rail-sep {
-      width: 24px;
-      height: 1px;
-      margin: 4px auto;
-      background: var(--glass-border);
-    }
-    /* The Frames toggle reads as the developer/behind-the-scenes panel: muted by
-       default, tinted (not filled) when active. */
-    .rail-btn.frames { color: var(--neutral-gray); }
-    .rail-btn.frames.on { color: var(--purple-light); background: var(--accent-a10); }
     /* Small dot marking that a summary has already been generated. */
     .rail-dot {
       position: absolute;
@@ -2101,28 +2069,22 @@ export class DevaiAgents extends LitElement {
     super.connectedCallback();
     this.client.setHandlers({
       onInitialized: (info) => {
-        this.recordFrame('initialized', info, undefined, `${info.agentId} · v${info.protocolVersion}`);
         this.onInitialized(info);
       },
       onSession: (info) => {
-        this.recordFrame('session', info, info.sessionId, `new · ${info.agentId}`);
         this.onSession(info);
       },
       onSessionLoaded: (info) => this.onSessionLoaded(info),
       onUpdate: (sid, update) => {
-        this.recordFrame('update', update, sid, (update as { sessionUpdate?: string }).sessionUpdate ?? 'update');
         this.onUpdate(sid, update);
       },
       onConfigOptions: (sid, configOptions) => {
-        this.recordFrame('config-options', { sessionId: sid, configOptions }, sid, `${configOptions.length} option${configOptions.length === 1 ? '' : 's'}`);
         this.onConfigOptions(sid, configOptions);
       },
       onPermissionRequest: (req) => {
-        this.recordFrame('permission-request', req, req.sessionId, req.toolCall?.title ?? 'permission');
         this.onPermissionRequest(req);
       },
       onElicitationRequest: (req) => {
-        this.recordFrame('elicitation-request', req, req.sessionId, req.message?.slice(0, 60) || 'elicitation');
         this.onElicitationRequest(req);
       },
       onTerminalOutput: (sid, terminalId, output) => this.onTerminalOutput(sid, terminalId, output),
@@ -2130,7 +2092,6 @@ export class DevaiAgents extends LitElement {
         if (!success) this.connError = error || 'Failed to open login terminal.';
       },
       onStop: (sid, stopReason, usage) => {
-        this.recordFrame('stop', { sessionId: sid, stopReason, usage }, sid, stopReason || 'end_turn');
         const s = this.session(sid);
         if (s) {
           s.convo.addTurnUsage(usage);
@@ -3380,34 +3341,6 @@ export class DevaiAgents extends LitElement {
       | (HTMLElement & { loadRecent: () => void })
       | null;
     sidebar?.loadRecent();
-  }
-
-  // ── Behind the Scenes live frame capture ───────────────────────────────────
-  // Push one captured ACP frame into the ring buffer, eliding any oversized
-  // base64 `data` strings first so the inspector stays readable and memory
-  // doesn't grow unbounded on an image-heavy turn.
-  private recordFrame(channel: FrameChannel, payload: unknown, sessionId?: string, label?: string) {
-    const frame: CapturedFrame = {
-      id: ++this.frameSeq,
-      ts: Date.now(),
-      channel,
-      sessionId,
-      label: label ?? channel,
-      payload: elideLargeData(payload),
-    };
-    const next = [...this.frameLog, frame];
-    this.frameLog = next.length > FRAME_LOG_CAP ? next.slice(next.length - FRAME_LOG_CAP) : next;
-    // Only re-render for a captured frame when a viewer is actually on screen;
-    // otherwise the buffer accumulates silently and is read fresh from the field
-    // on next open. Two viewers: the full-page Behind the Scenes reference, and
-    // the per-session Frames side panel. The panel only cares about frames for
-    // the focused session (or connection-level handshake frames, which have no
-    // sessionId), so background-session traffic doesn't churn its render.
-    // Coalesced through touch() so a streaming turn still caps at one render per
-    // frame.
-    const framesPanelWatching =
-      this.framesOpen && (sessionId === undefined || sessionId === this.activeId);
-    if (this.view === 'behind' || framesPanelWatching) this.touch();
   }
 
   // ── Event routing ───────────────────────────────────────────────────────────
@@ -4976,7 +4909,7 @@ export class DevaiAgents extends LitElement {
   // Behind the Scenes pane — the curated protocol → UI reference. The session/
   // picker view stays mounted (just hidden behind this), so live sockets and
   // subprocesses are unaffected, and the user's last live session is one sidebar
-  // click away. The *live* frame inspector lives in the session's Frames panel.
+  // click away.
   private renderBehindScenes() {
     return html`<agents-behind-scenes></agents-behind-scenes>`;
   }
@@ -5393,13 +5326,6 @@ export class DevaiAgents extends LitElement {
                 @close=${this.closePanel}
               ></agents-terminal>
             `) : nothing}
-            ${this.framesOpen ? html`
-              <agents-frames
-                .session=${s}
-                .frames=${this.frameLog}
-                @close=${this.closePanel}
-              ></agents-frames>
-            ` : nothing}
           </aside>
           ${this.renderPanelRail(s)}
         </div>
@@ -5427,8 +5353,7 @@ export class DevaiAgents extends LitElement {
       : which === 'summary' ? !this.summaryOpen
       : which === 'plan' ? !this.planOpen
       : which === 'prompts' ? !this.promptsOpen
-      : which === 'terminal' ? !this.terminalOpen
-      : !this.framesOpen;
+      : !this.terminalOpen;
     this.applyPanelState(this.activeId, { panel: which, open });
     if (which === 'source' && open) this.refreshSourceStatus(this.current, true);
     // Generate the summary lazily the first time the panel is opened, so a turn
@@ -5469,7 +5394,6 @@ export class DevaiAgents extends LitElement {
     this.planOpen = state.open && state.panel === 'plan';
     this.promptsOpen = state.open && state.panel === 'prompts';
     this.terminalOpen = state.open && state.panel === 'terminal';
-    this.framesOpen = state.open && state.panel === 'frames';
 
     if (sessionId) {
       this.sessionPanelStates.set(sessionId, { ...state });
@@ -5577,9 +5501,8 @@ export class DevaiAgents extends LitElement {
   }
 
   // Vertical rail on the far right holding the Files/Source/Prompts/Plan/Review/
-  // Summary toggles, plus a separated Frames toggle for the raw-protocol
-  // inspector. Each button expands the side-panel to its left (or collapses it
-  // if active).
+  // Summary/Terminal toggles. Each button expands the side-panel to its left (or
+  // collapses it if active).
   private renderPanelRail(s: AgentSession) {
     const changedFiles = countSessionChangedFiles(s.items, s.itemsVersion);
     const planDone = s.plan.filter((e) => e.status === 'completed').length;
@@ -5690,25 +5613,12 @@ export class DevaiAgents extends LitElement {
           </svg>
           <span class="rail-label">Terminal</span>
         </button>
-        <div class="rail-sep" role="separator"></div>
-        <button
-          class="rail-btn frames ${this.framesOpen ? 'on' : ''}"
-          @click=${() => this.togglePanel('frames')}
-          aria-pressed=${this.framesOpen}
-          ${tooltip({ content: 'Inspect the raw ACP protocol frames streaming from this agent', prefer: 'left' })}
-          aria-label="Live protocol frames"
-        >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 4 3 8l3 4M10 4l3 4-3 4"/>
-          </svg>
-          <span class="rail-label">Frames</span>
-        </button>
       </nav>
     `;
   }
 
   private get panelOpen(): boolean {
-    return this.reviewOpen || this.treeOpen || this.sourceOpen || this.summaryOpen || this.planOpen || this.promptsOpen || this.terminalOpen || this.framesOpen;
+    return this.reviewOpen || this.treeOpen || this.sourceOpen || this.summaryOpen || this.planOpen || this.promptsOpen || this.terminalOpen;
   }
 
   private terminateRemovedSessionTerminals(previous?: AgentSession[]) {

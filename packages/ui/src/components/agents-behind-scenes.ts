@@ -25,10 +25,8 @@ import './agent-logo.js';
 // The "Behind the Scenes" pane: an educational reference that exposes the Agent
 // Client Protocol layer the Agents tab speaks to. It pairs curated protocol
 // frames with the live UI they produce (folded through the *same* Conversation
-// and renderer the live view uses). The *live* inspector of frames from your
-// active session lives in the session's "Frames" side panel (agents-frames.ts),
-// where it can sit next to the chat; this page just points you to it. Read-only
-// and stateless w.r.t. agents — agents-view stays mounted so subprocesses survive.
+// and renderer the live view uses). Read-only and stateless w.r.t. agents —
+// agents-view stays mounted so subprocesses survive.
 
 interface AuthSnapshot {
   loggedIn: boolean;
@@ -54,7 +52,6 @@ const OUTLINE: OutlineEntry[] = [
     label: 'Protocol → UI mapping',
     children: SHOWCASE.map((e) => ({ id: `card-${e.id}`, label: e.title })),
   },
-  { id: 'live', label: 'Live frames' },
 ];
 
 // Flattened id list for the scrollspy observer: every section plus every card.
@@ -464,21 +461,6 @@ export class AgentsBehindScenes extends LitElement {
         font-style: italic;
         max-width: 720px;
       }
-
-      /* ── Live-inspector pointer ── */
-      .live-pointer {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 13px 16px;
-        border: 1px solid var(--glass-border);
-        border-radius: var(--radius-lg);
-        background: var(--w3);
-        font-size: var(--font-size-base);
-        color: var(--white);
-      }
-      .live-pointer svg { flex-shrink: 0; color: var(--purple-light); }
-      .live-pointer strong { color: var(--bright-white); }
     `,
   ];
 
@@ -490,7 +472,6 @@ export class AgentsBehindScenes extends LitElement {
           ${this.renderHero()}
           ${this.renderAuth()}
           ${this.renderProtocolCards()}
-          ${this.renderLivePointer()}
         </div>
       </div>
     `;
@@ -539,7 +520,7 @@ export class AgentsBehindScenes extends LitElement {
           newline-delimited stdio. Kairos launches the agent with <code>kairos launch</code>, injects
           provider credentials from your configured auth method, and the browser never holds
           an API key. This page shows you each protocol message side-by-side with the real component it
-          produces, plus a live inspector of frames arriving from your active session.
+          produces.
         </p>
         <div class="pipeline" role="img" aria-label="Pipeline: UI to ACP to kairos launch to Auth Proxy to LLM Provider">
           <div class="stage">
@@ -820,32 +801,6 @@ export class AgentsBehindScenes extends LitElement {
     `;
   }
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Pointer to the live inspector (now a per-session side panel)
-
-  // The live frame inspector used to live buried at the bottom of this page.
-  // It's now the "Frames" panel beside the chat (agents-frames.ts) so it can be
-  // watched side-by-side with a running session. This section just points there.
-  private renderLivePointer() {
-    return html`
-      <section id="live">
-        <div class="section-title"><span class="dot"></span>Watch it live</div>
-        <p class="section-lead">
-          Everything above is curated reference data. To watch the real ACP frames stream from your own
-          agent, open the <strong>Frames</strong> panel from the rail on the right of any live session —
-          it lists each frame newest-first and, for renderable
-          <code style="font-family:var(--font-mono);color:var(--purple-light)">session/update</code>
-          notifications, shows the very component it produces, right next to your chat.
-        </p>
-        <div class="live-pointer">
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 4 3 8l3 4M10 4l3 4-3 4"/>
-          </svg>
-          <span>Look for the <strong>Frames</strong> button at the bottom of the session side rail.</span>
-        </div>
-      </section>
-    `;
-  }
 }
 
 declare global {

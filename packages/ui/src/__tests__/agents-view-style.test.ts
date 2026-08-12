@@ -178,7 +178,7 @@ describe('agents view styles', () => {
     expect(sourceRail).toBeGreaterThan(filesRail);
     expect(promptsRail).toBeGreaterThan(sourceRail);
     expect(source).toContain("import './agents-source-control.js';");
-    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal' | 'frames';");
+    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal';");
     expect(source).toContain('@state() private sourceOpen = false;');
     expect(source).toContain('private sourceStatusSummaries = new Map<string, SourceStatusSummary>();');
     expect(source).toContain("this.togglePanel('source')");
@@ -208,7 +208,7 @@ describe('agents view styles', () => {
   });
 
   it('stores right-panel selection and expanded state per session', () => {
-    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal' | 'frames';");
+    expect(source).toContain("type PanelId = 'files' | 'source' | 'review' | 'summary' | 'plan' | 'prompts' | 'terminal';");
     expect(source).toContain('type SessionPanelState = { panel: PanelId; open: boolean };');
     expect(source).toContain('private sessionPanelStates = new Map<string, SessionPanelState>();');
     expect(source).toContain('private saveActivePanelState()');
