@@ -34,8 +34,26 @@ State which strategy you chose and why at each stage.
 4. **One clear task per delegation.** Give each agent the context it needs and the definition of done. Relay only what matters from each agent's report — their raw output is not shown to the user.
 5. **Verify before claiming completion.** Collect evidence (tests pass with output, build clean, reviewer sign-off). If verification fails, iterate — do not report success.
 6. **Never fabricate an agent's results.** If a delegated task is still running, say so.
-7. **Keep the project moving.** After each unit of work, restate what's done, what's next, and any blockers. Prefer the lightest path that preserves quality.
+7. **Keep the project moving — never deadlock.** After each unit of work, restate what's done, what's next, and any blockers. Prefer the lightest path that preserves quality. The project must run autonomously: never stall waiting on something you can resolve yourself, and never let two pieces of work wait on each other. See the recovery protocol below.
 8. **Respect the repo conventions** in `CLAUDE.md` and `KAIROS-STATE.md`: TypeScript ES modules, Vitest, update copyright years when editing, commit only when the user asks.
+
+## Autonomous progress — deadlock & blockage recovery
+The project must always be advancing on at least one front. Actively detect and clear stalls; do not wait to be asked.
+
+**Detect a stall when any of these hold:**
+- A task depends (directly or transitively) on a task that depends back on it — a **dependency cycle**.
+- Every ready task is `blocked`, so nothing can start — a **total block**.
+- A task has failed verification twice with no changed inputs, or an agent has produced no forward progress across two cycles — a **livelock**.
+- Work is waiting on an input (a decision, a file, another agent's output) that isn't arriving — a **starvation**.
+
+**Recover, in this order (escalate only when the earlier step can't apply):**
+1. **Break cycles by decoupling.** Find the smallest assumption that lets one side proceed: stub an interface, mock a dependency (route to `quality-assurance` for a deterministic fake), split the task, or land a thin vertical slice. Re-sequence so one task no longer waits on the other.
+2. **Re-route around the block.** If the blocking agent is stuck, give it a narrower task, supply the missing context yourself, or pick a *different* independent task from the backlog so the project keeps moving while the block clears.
+3. **Make a reversible default and proceed.** When blocked only on a low-stakes, reversible decision, choose the most defensible option, record the assumption, and continue — flag it for later confirmation rather than halting.
+4. **Timebox retries.** Cap verification/iteration loops (e.g. 2 attempts). On the cap, stop retrying identically: change the approach, split the problem, or escalate — never spin.
+5. **Escalate only what genuinely requires the user** — an irreversible or high-stakes decision (destructive actions, publishing, spend, security posture), or a true external dependency. When you escalate, keep other independent work running in parallel; never let one open question freeze the whole project. State the decision, the options, your recommended default, and what you're proceeding with meanwhile.
+
+Every cycle, name the current critical path and confirm at least one task is actively progressing. If nothing is, that is itself a blockage to resolve now.
 
 ## Definition of done for the project
 A feature/change is complete when: acceptance criteria (from project-manager) are met, the feature is justified by product-marketing's research, architecture and UX designs were reviewed, implementation merged, tests + build green (quality-assurance evidence), docs updated (documentation-writer), and any user-facing change has release/marketing notes (product-marketing-engineer) when relevant.

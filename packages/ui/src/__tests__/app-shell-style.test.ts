@@ -50,10 +50,16 @@ describe('app shell styles', () => {
     expect(source).not.toContain('"nav nav"');
   });
 
-  it('keeps the header logo tile transparent so it blends with the toolbar', () => {
-    expect(cssRule('.logo-mark .tile')).toContain('fill: transparent');
-    expect(cssRule('.logo-mark .tile-glow')).toContain('opacity: 0');
-    expect(cssRule('.logo-mark .tile-border')).toContain('opacity: 0');
+  it('renders the header logo as a bare Kalimba mark with no backplate tile', () => {
+    // The mark blends with the toolbar by having no tile/glow/border backplate.
+    expect(source).not.toContain('class="tile"');
+    expect(source).not.toContain('class="tile-glow"');
+    expect(source).not.toContain('class="tile-border"');
+    // It is the Kalimba (tines + bridge), and it animates on hover / when active.
+    expect(source).toContain('class="tine"');
+    expect(source).toContain('class="bridge"');
+    expect(source).toContain('@keyframes tine-ripple');
+    expect(cssRule(':host([agent-active]) .logo-mark')).not.toBe('');
   });
 
   it('scopes native titlebar chrome to Tauri desktop shells', () => {
@@ -82,8 +88,9 @@ describe('app shell styles', () => {
     expect(nativeHeader).not.toContain('-webkit-backdrop-filter');
 
     const nativeNav = cssRule(':host([tauri-native-titlebar]) nav');
-    expect(nativeNav).toContain('border: 1px solid transparent');
-    expect(nativeNav).toContain('background: transparent');
+    // Under a native titlebar the nav collapses into a compact rounded pill.
+    expect(nativeNav).toContain('border-radius: 100px');
+    expect(nativeNav).toContain('background: var(--w4)');
   });
 
   it('keeps header controls visually quiet until interaction', () => {
@@ -92,11 +99,12 @@ describe('app shell styles', () => {
     expect(host).toContain('--header-control-border: transparent');
 
     const activeNav = cssRule('nav button[active]');
-    expect(activeNav).toContain('background: transparent');
+    // The active tab reads as a soft filled accent pill (no underline marker).
+    expect(activeNav).toContain('background: var(--accent-a18)');
     expect(activeNav).toContain('color: var(--accent)');
 
     const activeNavUnderline = cssRule('nav button[active]::after');
-    expect(activeNavUnderline).toContain('height: 3px');
+    expect(activeNavUnderline).toContain('display: none');
 
     const toggle = cssRule('.theme-toggle');
     expect(toggle).toContain('border: 1px solid var(--header-control-border)');

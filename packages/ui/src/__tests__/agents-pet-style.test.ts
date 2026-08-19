@@ -10,46 +10,48 @@ function cssRule(selector: string): string {
   return match?.[1] ?? '';
 }
 
+// The sidebar pet is the "Waveform Companion" — five equalizer bars that
+// express agent mood through rhythm and color. These tests pin that design
+// (deliberately distinct from a geometric-shape-with-eyes mascot).
 describe('agents pet styles', () => {
-  it('keeps Poly eyes visible across light and dark themes', () => {
-    const eye = cssRule('.eye');
-    expect(eye).toContain('fill: var(--on-accent');
-    expect(eye).toContain('stroke: rgba(5, 12, 22, 0.42)');
-    expect(eye).toContain('filter: drop-shadow');
-    expect(eye).not.toContain('var(--bright-white');
-
-    expect(source).toContain("const LEFT_EYE_X = 25.75;");
-    expect(source).toContain("const RIGHT_EYE_X = 32.25;");
-    expect(source).toContain("const rx = this.mood === 'worried' ? 3.05 : 2.75;");
-    expect(source).toContain("const ry = this.mood === 'worried' ? 3.15 : 2.85;");
+  it('renders exactly five waveform bars', () => {
+    const bars = source.match(/<span class="bar"><\/span>/g) ?? [];
+    expect(bars).toHaveLength(5);
+    expect(source).not.toContain('<polygon class="ring"');
+    expect(source).not.toContain('class="eye"');
   });
 
-  it('uses visible face motion without moving the whole hub', () => {
-    expect(source).toContain('.working .pupils { animation: scan 2.4s ease-in-out infinite; }');
-    expect(source).toContain('@keyframes scan');
+  it('tints the bars by mood state', () => {
+    // Base (idle) uses the accent; each mood recolors the bars.
+    expect(cssRule('.bar')).toContain('background: var(--accent');
+    expect(cssRule('.sleeping .bar')).toContain('background: var(--neutral-gray)');
+    expect(cssRule('.celebrating .bar')).toContain('background: var(--emerald');
+    expect(cssRule('.worried .bar')).toContain('background: var(--red');
   });
 
-  it('renders Poly without an app-icon tile or backplate', () => {
-    expect(source).not.toContain('class="tile"');
-    expect(source).not.toContain('class="tile-glow"');
-    expect(source).not.toContain('class="tile-border"');
-    expect(source).not.toContain('class="mark-shadow"');
-    expect(source).toContain('<polygon class="ring"');
-    expect(source).toContain('r="3.35"');
+  it('animates the bars only when motion is allowed', () => {
+    expect(source).toContain('@media (prefers-reduced-motion: no-preference)');
+    // Each mood has its own rhythm keyframes.
+    expect(source).toContain('.idle .bar { animation: wave');
+    expect(source).toContain('.working .bar { animation: bounce');
+    expect(source).toContain('.sleeping .bar { animation: breathe');
+    expect(source).toContain('.worried .bar { animation: erratic');
+    expect(source).toContain('@keyframes wave');
+    expect(source).toContain('@keyframes bounce');
   });
 
-  it('keeps the spinning network attached to the hexagon frame', () => {
-    expect(source).toContain('<svg class="poly-net" viewBox="0 0 58 58">');
-    expect(source).toContain('<g class="net">\n                <polygon class="ring" points=${HEX_POINTS} />');
-    expect(source).not.toContain('<polygon class="ring" points=${HEX_POINTS} />\n            <g class="net">');
-    expect(source).toContain('.working .poly-net { animation: spin 6s linear infinite; }');
-    expect(source).not.toContain('.working .net { animation: spin');
-    expect(source).toContain('@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }');
+  it('scales bars from a stable bottom baseline (no layout shift)', () => {
+    expect(cssRule('.bar')).toContain('transform-origin: bottom center');
+    // The wave/bounce animations scale on Y, so the bars grow upward in place.
+    expect(source).toContain('transform: scaleY');
   });
 
-  it('avoids zoom-sensitive SVG child scaling while the network spins', () => {
-    expect(cssRule('.nodes circle')).not.toContain('transform-box');
-    expect(cssRule('.nodes circle')).not.toContain('transform-origin');
-    expect(source).toContain('@keyframes nodepulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }');
+  it('bursts sparkles on celebrate and exposes an accessible label', () => {
+    expect(cssRule('.spark')).toContain('background: var(--emerald');
+    expect(source).toContain('.celebrating .spark { animation: pop');
+    expect(source).toContain('@keyframes pop');
+    // The stage is announced to assistive tech with the mood hint.
+    expect(source).toContain('role="img"');
+    expect(source).toContain('aria-label=${MOOD_HINT[this.mood]}');
   });
 });

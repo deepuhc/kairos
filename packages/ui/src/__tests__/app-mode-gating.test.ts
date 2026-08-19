@@ -175,18 +175,16 @@ describe('app — logo differentiation', () => {
     expect(appSource).toContain('@keyframes logo-breathe');
   });
 
-  it('bottom-left pet uses an orb shape, NOT the Kalimba', () => {
-    expect(petSource).toContain('class="orb-body"');
-    expect(petSource).toContain('class="orb-ring"');
-    expect(petSource).toContain('class="orb-dot"');
+  it('bottom-left pet uses waveform bars, NOT the Kalimba', () => {
+    expect(petSource).toContain('<span class="bar"></span>');
     expect(petSource).not.toContain('class="tine"');
     expect(petSource).not.toContain('class="bridge"');
   });
 
-  it('pet orb changes color with mood state', () => {
-    expect(petSource).toContain('.sleeping .orb-ring');
-    expect(petSource).toContain('.celebrating .orb-ring');
-    expect(petSource).toContain('.worried .orb-ring');
+  it('pet waveform changes color with mood state', () => {
+    expect(petSource).toContain('.sleeping .bar');
+    expect(petSource).toContain('.celebrating .bar');
+    expect(petSource).toContain('.worried .bar');
   });
 });
 
