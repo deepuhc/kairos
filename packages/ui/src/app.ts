@@ -20,6 +20,7 @@ import './components/help-drawer.js';
 import './components/whats-new-panel.js';
 import './components/presence-pill.js';
 import './components/testimonials.js';
+import './components/file-drop.js';
 
 type View = 'agents' | 'files' | 'prompts' | 'plan' | 'review' | 'sessions' | 'customize' | 'settings';
 
@@ -712,6 +713,12 @@ export class DevaiApp extends LitElement {
       line-height: 1.6;
       margin: 0;
     }
+    .files-upload {
+      width: 100%;
+      max-width: 640px;
+      margin-top: 28px;
+      text-align: left;
+    }
     .view-enter {
       max-width: 1200px;
       margin: 0 auto;
@@ -1139,7 +1146,12 @@ export class DevaiApp extends LitElement {
   private renderView() {
     switch (this.view) {
       case 'files':
-        return html`<div class="placeholder-view"><h2>Files</h2><p>Browse and manage project files, workspace trees, and git worktrees.</p></div>`;
+        return html`
+          <div class="placeholder-view">
+            <h2>Files</h2>
+            <p>Drop a file to detect its type and extract its contents locally — no cloud upload. Text, code, JSON, CSV and spreadsheets are supported.</p>
+            <div class="files-upload"><kairos-file-drop></kairos-file-drop></div>
+          </div>`;
       case 'prompts':
         return html`<div class="placeholder-view"><h2>Prompts</h2><p>Manage prompt templates, system instructions, and reusable agent configurations.</p></div>`;
       case 'plan':

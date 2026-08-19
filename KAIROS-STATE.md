@@ -145,7 +145,10 @@ npm run desktop:build  # Produce .dmg / .deb / .msi
   (`windows-ci-import-libs`) plus ~19 failing *files* are CI/release scripts
   (codesign, windows, release-notes) absent from a local checkout — not app logic.
 - **File pipeline**: `packages/files` now has unit tests (`process.test.ts`) and a
-  server endpoint (`POST /api/files/extract`, tested in `packages/server`).
+  server endpoint (`POST /api/files/extract`, tested in `packages/server`). The UI
+  half ships as `<kairos-file-drop>` (drag-drop upload → extract → table/snippet
+  preview) in the **Files** tab, backed by `services/file-extract.ts`; both are
+  unit-tested (`file-extract.test.ts`, `file-drop-style.test.ts`).
 
 ## Auth Architecture (Post-Decoupling)
 
