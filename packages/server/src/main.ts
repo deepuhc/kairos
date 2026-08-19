@@ -10,13 +10,16 @@ import { PipelineEngine, parsePlan } from '@kairos/orchestrator';
 import type { PhaseDefinition, ExecutionContext } from '@kairos/orchestrator';
 import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
+import { extractFileRequest } from './files/extract.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Files arrive as base64 in the JSON body, so allow a larger payload than the
+// 100kb default. 25mb of base64 ≈ an ~18mb source file.
+app.use(express.json({ limit: '25mb' }));
 
 // Serve the UI if built
 const uiDist = join(__dirname, '..', '..', 'ui', 'dist');
@@ -51,12 +54,18 @@ app.get('/api/agents', (_req, res) => {
 });
 
 app.get('/api/pipelines', (_req, res) => {
-  const states = [...pipelines.entries()].map(([id, engine]) => ({
-    id,
+  const states = [...pipelines.values()].map((engine) => ({
     ...engine.getState(),
     phases: Object.fromEntries(engine.getState().phases),
   }));
   res.json(states);
+});
+
+// Detect + extract an uploaded file. The client sends the file as base64 in the
+// JSON body; extraction runs locally (no cloud upload) via @kairos/files.
+app.post('/api/files/extract', async (req, res) => {
+  const { status, body } = await extractFileRequest(req.body);
+  res.status(status).json(body);
 });
 
 // SPA fallback

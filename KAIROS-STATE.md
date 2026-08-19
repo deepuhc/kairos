@@ -139,9 +139,13 @@ npm run desktop:build  # Produce .dmg / .deb / .msi
 ## Test Suite
 
 - **Framework**: Vitest
-- **Test files**: 60 in `packages/ui/src/__tests__/`
+- **Test files**: 73 across `packages/*/src/**/__tests__/`
 - **Run**: `npx vitest run` (from project root)
-- **Known**: ~23 test files fail due to missing CI scripts (not present locally); 37 pass
+- **Status (2026-08-19)**: 447 tests pass, 448 total. The single failing test
+  (`windows-ci-import-libs`) plus ~19 failing *files* are CI/release scripts
+  (codesign, windows, release-notes) absent from a local checkout — not app logic.
+- **File pipeline**: `packages/files` now has unit tests (`process.test.ts`) and a
+  server endpoint (`POST /api/files/extract`, tested in `packages/server`).
 
 ## Auth Architecture (Post-Decoupling)
 
