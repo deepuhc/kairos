@@ -1,4 +1,5 @@
 import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult, StreamChunk, CostEstimate, ModelCapability, ContentPart } from './types.js';
+import { looksLikeVisionModel } from './vision-models.js';
 
 /**
  * Configuration for a custom HTTP provider.
@@ -32,6 +33,11 @@ export class CustomHttpProvider implements Provider {
     this.isLocal = config.isLocal;
   }
 
+  /** The endpoint this provider talks to — useful for diagnostics. */
+  get endpoint(): string {
+    return this.config.baseUrl;
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       const url = this.config.type === 'ollama'
@@ -62,7 +68,10 @@ export class CustomHttpProvider implements Provider {
     // For custom providers, infer from model name
     const lower = modelId.toLowerCase();
     switch (capability) {
-      case 'vision': return lower.includes('vision') || lower.includes('llava') || lower.includes('4o');
+      // A custom endpoint may front either open-weight or hosted models, so
+      // consider both marker sets. Shared with OllamaProvider so the same model
+      // is classified identically however it is reached.
+      case 'vision': return looksLikeVisionModel(lower, true);
       case 'code': return lower.includes('code') || lower.includes('coder') || lower.includes('starcoder');
       case 'reasoning': return lower.includes('r1') || lower.includes('think') || lower.includes('o1') || lower.includes('o3');
       case 'tool_calling': return lower.includes('qwen') || lower.includes('hermes') || lower.includes('gpt');
@@ -383,7 +392,7 @@ export class CustomHttpProvider implements Provider {
     const lower = modelName.toLowerCase();
     if (lower.includes('code') || lower.includes('coder')) caps.push('code');
     if (lower.includes('r1') || lower.includes('think') || lower.includes('o1') || lower.includes('o3')) caps.push('reasoning');
-    if (lower.includes('vision') || lower.includes('llava') || lower.includes('4o')) caps.push('vision');
+    if (looksLikeVisionModel(lower, true)) caps.push('vision');
     if (lower.includes('qwen') || lower.includes('hermes') || lower.includes('gpt')) caps.push('tool_calling');
     return caps;
   }

@@ -158,6 +158,29 @@ npm run desktop:build  # Produce .dmg / .deb / .msi
   image thumbnail above its description. (Deferred: real downscaled raster
   thumbnails — needs a new image lib, not yet added.)
 
+## Remote / Homelab Provider Connection
+
+- **Config file**: `~/.kairos/providers.json` (dir overridable via `KAIROS_CONFIG_DIR`),
+  loaded by `packages/server/src/config/providers-config.ts` into a `RegistryConfig`.
+  Optional and best-effort — a missing/malformed file logs a warning and falls back to
+  defaults rather than failing startup. `parseProvidersConfig` is pure (no fs) and
+  validates each `custom` entry independently, so one bad entry cannot break the rest.
+- **Resolution order**: built-in default (`localhost:11434`) < `OLLAMA_HOST` env var <
+  `providers.json`. `OllamaProvider` now honours `OLLAMA_HOST` (matching
+  `OllamaHttpAgent`, which already did) and accepts a bare `host:port`.
+- **Diagnostics**: `GET /api/providers/diagnostics` reports each provider's resolved
+  `endpoint`, `reachable`, model list, and `visionModels` — the connectivity check for a
+  remote setup.
+- **Vision detection is shared**: `packages/providers/src/vision-models.ts`
+  (`looksLikeVisionModel`) is used by both `OllamaProvider` and `CustomHttpProvider`, so a
+  model is classified the same however it is reached. It covers families whose tags carry
+  no `vision`/`llava` marker (`gemma3`, `minicpm-v`, `moondream`, `pixtral`, the Qwen-VL
+  family via a boundary-anchored pattern). Hosted markers are opt-in (`includeHosted`).
+- **Homelab host** (per `~/projects/homelab-ai`, docs-only repo): `deepak-AI`, Ubuntu,
+  Ollama as a systemd service on `0.0.0.0:11434`, reached over Tailscale at
+  `100.80.191.11`; **no auth**. 8 models, **none vision-capable** — so image extraction
+  degrades to the placeholder until a vision model is pulled.
+
 ## Auth Architecture (Post-Decoupling)
 
 - No MathWorks/gateway dependency

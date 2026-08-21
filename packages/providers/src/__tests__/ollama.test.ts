@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OllamaProvider } from '../ollama.js';
 
 // Mock global fetch
@@ -23,6 +23,55 @@ describe('OllamaProvider', () => {
     it('accepts custom base URL', () => {
       const p = new OllamaProvider('http://192.168.1.100:11434');
       expect(p.isLocal).toBe(true);
+    });
+  });
+
+  // A remote/homelab Ollama is addressed by base URL. Resolution order is
+  // explicit arg > OLLAMA_HOST (Ollama's own convention, also used by
+  // OllamaHttpAgent) > localhost.
+  describe('endpoint resolution', () => {
+    const original = process.env.OLLAMA_HOST;
+    afterEach(() => {
+      if (original === undefined) delete process.env.OLLAMA_HOST;
+      else process.env.OLLAMA_HOST = original;
+    });
+
+    it('defaults to localhost when nothing is configured', () => {
+      delete process.env.OLLAMA_HOST;
+      expect(new OllamaProvider().endpoint).toBe('http://localhost:11434');
+    });
+
+    it('falls back to OLLAMA_HOST', () => {
+      process.env.OLLAMA_HOST = 'http://100.80.191.11:11434';
+      expect(new OllamaProvider().endpoint).toBe('http://100.80.191.11:11434');
+    });
+
+    it('adds a scheme to a bare host:port, as Ollama itself allows', () => {
+      process.env.OLLAMA_HOST = '100.80.191.11:11434';
+      expect(new OllamaProvider().endpoint).toBe('http://100.80.191.11:11434');
+    });
+
+    it('strips a trailing slash so request paths never double up', () => {
+      expect(new OllamaProvider('http://box:11434/').endpoint).toBe('http://box:11434');
+    });
+
+    it('prefers an explicit base URL over the env var', () => {
+      process.env.OLLAMA_HOST = 'http://from-env:11434';
+      expect(new OllamaProvider('http://explicit:11434').endpoint).toBe('http://explicit:11434');
+    });
+
+    it('ignores a blank OLLAMA_HOST', () => {
+      process.env.OLLAMA_HOST = '   ';
+      expect(new OllamaProvider().endpoint).toBe('http://localhost:11434');
+    });
+
+    it('requests the configured host, not localhost', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      await new OllamaProvider('http://100.80.191.11:11434').isAvailable();
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://100.80.191.11:11434/api/tags',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
   });
 
@@ -96,6 +145,36 @@ describe('OllamaProvider', () => {
 
     it('detects vision models', () => {
       expect(provider.hasCapability('llava:7b', 'vision')).toBe(true);
+    });
+
+    // Several multimodal families carry no "vision"/"llava" marker in their tag,
+    // so a name-substring check alone would route images to a blind model.
+    it('detects multimodal families that lack a "vision" marker', () => {
+      for (const id of [
+        'llama3.2-vision:11b',
+        'qwen2.5vl:7b',
+        'qwen2-vl:7b',
+        'minicpm-v:8b',
+        'moondream:latest',
+        'bakllava:7b',
+        'gemma3:12b',
+        'pixtral:12b',
+      ]) {
+        expect(provider.hasCapability(id, 'vision'), id).toBe(true);
+      }
+    });
+
+    it('does not mistake text-only homelab models for vision models', () => {
+      for (const id of [
+        'qwen2.5-coder:14b',
+        'deepseek-r1:14b',
+        'qwen2.5:14b',
+        'phi3:medium',
+        'mistral:latest',
+        'llama3.1:8b',
+      ]) {
+        expect(provider.hasCapability(id, 'vision'), id).toBe(false);
+      }
     });
 
     it('all models have chat and streaming', () => {

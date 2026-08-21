@@ -11,6 +11,7 @@ import type { PhaseDefinition, ExecutionContext } from '@kairos/orchestrator';
 import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
 import { extractFileRequest } from './files/extract.js';
+import { loadProvidersConfig, providersConfigPath } from './config/providers-config.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,15 @@ if (existsSync(uiDist)) {
 }
 
 // --- Services ---
-const registry = new ProviderRegistry();
+// Provider endpoints come from ~/.kairos/providers.json when present, so a
+// remote (homelab) Ollama or any OpenAI-compatible endpoint can be used without
+// hardcoding a host. Missing/invalid config falls back to the built-in defaults
+// (Ollama at localhost:11434, or $OLLAMA_HOST if set).
+const providersConfig = loadProvidersConfig();
+for (const warning of providersConfig.warnings) {
+  console.warn(`  [providers] ${warning}`);
+}
+const registry = new ProviderRegistry(providersConfig.config);
 const router = new SmartRouter(registry);
 const pool = new AgentPool();
 const pipelines = new Map<string, PipelineEngine>();
@@ -48,6 +57,35 @@ app.get('/api/providers', async (_req, res) => {
     }))
   );
   res.json(results);
+});
+
+// Which provider endpoints are configured, and can we actually reach them?
+// This is the connectivity check for a remote/homelab setup: it reports the
+// resolved endpoint per provider plus a reachable flag and its model list.
+app.get('/api/providers/diagnostics', async (_req, res) => {
+  const providers = await Promise.all(
+    registry.all.map(async (p) => {
+      const reachable = await p.isAvailable();
+      const models = reachable ? await p.listModels().catch(() => []) : [];
+      return {
+        name: p.name,
+        isLocal: p.isLocal,
+        // `endpoint` is exposed by providers that talk to a configurable host.
+        endpoint: (p as { endpoint?: string }).endpoint,
+        reachable,
+        modelCount: models.length,
+        models: models.map((m) => ({ id: m.id, capabilities: m.capabilities })),
+        visionModels: models.filter((m) => m.capabilities?.includes('vision')).map((m) => m.id),
+      };
+    }),
+  );
+  res.json({
+    configPath: providersConfigPath(),
+    configLoaded: providersConfig.loaded,
+    warnings: providersConfig.warnings,
+    ollamaHostEnv: process.env.OLLAMA_HOST ?? null,
+    providers,
+  });
 });
 
 app.get('/api/agents', (_req, res) => {

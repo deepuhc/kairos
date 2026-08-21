@@ -91,6 +91,60 @@ curl http://localhost:11434/api/tags
 
 Kairos auto-detects Ollama at `localhost:11434`.
 
+#### Remote / homelab Ollama
+
+To point Kairos at an Ollama running on another machine, either set `OLLAMA_HOST`:
+
+```bash
+export OLLAMA_HOST="http://100.80.191.11:11434"   # full URL or bare host:port
+```
+
+…or create `~/.kairos/providers.json` (override the directory with `KAIROS_CONFIG_DIR`):
+
+```json
+{
+  "ollama": { "baseUrl": "http://100.80.191.11:11434" }
+}
+```
+
+Additional endpoints — a second Ollama, an OpenAI-compatible server (vLLM, LM Studio,
+LiteLLM), or Open WebUI — go under `custom`:
+
+```json
+{
+  "custom": [
+    {
+      "name": "homelab",
+      "baseUrl": "http://100.80.191.11:11434",
+      "type": "ollama",
+      "isLocal": true,
+      "defaultModel": "qwen2.5:14b"
+    },
+    {
+      "name": "vllm",
+      "baseUrl": "http://100.80.191.11:8000/v1",
+      "type": "openai-compatible",
+      "isLocal": true,
+      "auth": { "type": "bearer", "token": "..." }
+    }
+  ]
+}
+```
+
+`type` must be `ollama`, `openai-compatible`, or `open-webui`. `isLocal: true` marks the
+endpoint as private so privacy-sensitive routing prefers it and never falls back to a cloud
+provider. The file is optional — if it is missing or malformed the server logs a warning and
+falls back to the defaults rather than failing to start.
+
+Verify connectivity:
+
+```bash
+curl -s http://localhost:3333/api/providers/diagnostics
+```
+
+This reports each provider's resolved endpoint, whether it is reachable, and which of its
+models are vision-capable.
+
 ### Option 2: Anthropic (Claude)
 
 Best for: complex reasoning, high-quality output.

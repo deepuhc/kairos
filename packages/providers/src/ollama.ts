@@ -1,12 +1,43 @@
 import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult, StreamChunk, CostEstimate, ModelCapability } from './types.js';
+import { looksLikeVisionModel } from './vision-models.js';
+
+export const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
+
+/**
+ * Normalize an Ollama host into a base URL.
+ *
+ * Ollama's own `OLLAMA_HOST` convention allows a bare `host:port` (e.g.
+ * `0.0.0.0:11434`), so accept that as well as a full URL. A bare host gets
+ * `http://`, and any trailing slash is dropped so `${baseUrl}/api/tags` never
+ * doubles up.
+ */
+export function normalizeOllamaHost(host: string | undefined): string | undefined {
+  const trimmed = host?.trim();
+  if (!trimmed) return undefined;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  return withScheme.replace(/\/+$/, '');
+}
 
 export class OllamaProvider implements Provider {
   readonly name = 'ollama';
   readonly isLocal = true;
   private baseUrl: string;
 
-  constructor(baseUrl = 'http://localhost:11434') {
-    this.baseUrl = baseUrl;
+  /**
+   * `baseUrl` wins; otherwise fall back to `OLLAMA_HOST` (the same env var
+   * Ollama itself and `OllamaHttpAgent` use) so a remote/homelab Ollama works
+   * with zero config, then to localhost.
+   */
+  constructor(baseUrl?: string) {
+    this.baseUrl =
+      normalizeOllamaHost(baseUrl) ??
+      normalizeOllamaHost(process.env.OLLAMA_HOST) ??
+      DEFAULT_OLLAMA_BASE_URL;
+  }
+
+  /** The resolved endpoint this provider talks to — useful for diagnostics. */
+  get endpoint(): string {
+    return this.baseUrl;
   }
 
   async isAvailable(): Promise<boolean> {
@@ -165,7 +196,8 @@ export class OllamaProvider implements Provider {
     if (lower.includes('coder') || lower.includes('code')) caps.push('code');
     if (lower.includes('r1') || lower.includes('think')) caps.push('reasoning');
     if (lower.includes('qwen') || lower.includes('hermes')) caps.push('tool_calling');
-    if (lower.includes('llava') || lower.includes('vision')) caps.push('vision');
+    // Ollama serves open-weight models only — no hosted markers.
+    if (looksLikeVisionModel(lower)) caps.push('vision');
     return caps;
   }
 }
