@@ -1,4 +1,12 @@
 import { processFile, FileProcessingError, type ExtractionResult } from '@kairos/files';
+import type { SmartRouter } from '@kairos/providers';
+import { describeImage } from './vision.js';
+
+/** Optional collaborators the extract path can use to enrich a result. */
+export interface ExtractDeps {
+  /** When present, image results are enriched with a vision-model description. */
+  router?: SmartRouter;
+}
 
 /** Shape the client POSTs to /api/files/extract. */
 export interface ExtractRequestBody {
@@ -37,7 +45,7 @@ function stripDataUrl(content: string): string {
  * to an HTTP status + JSON body. Pure (no Express types) so it is unit-testable
  * and reusable; the route handler is a thin wrapper over it.
  */
-export async function extractFileRequest(body: ExtractRequestBody): Promise<ExtractResponse> {
+export async function extractFileRequest(body: ExtractRequestBody, deps: ExtractDeps = {}): Promise<ExtractResponse> {
   const { content, filename } = body ?? {};
 
   if (typeof content !== 'string' || content.length === 0) {
@@ -63,6 +71,7 @@ export async function extractFileRequest(body: ExtractRequestBody): Promise<Extr
 
   try {
     const result = await processFile(buffer, filename);
+    await enrichImageResult(result, deps.router);
     return { status: 200, body: { ok: true, result } };
   } catch (err) {
     if (err instanceof FileProcessingError) {
@@ -75,5 +84,24 @@ export async function extractFileRequest(body: ExtractRequestBody): Promise<Extr
       status: 500,
       body: { ok: false, error: err instanceof Error ? err.message : String(err), reason: 'extract' },
     };
+  }
+}
+
+/**
+ * If the extraction is an image and a vision-capable router is available, run
+ * the image through a vision model and replace its placeholder `content` text
+ * with a real description. Mutates `result` in place. On any failure or when no
+ * vision model exists, the result is left untouched so extraction still
+ * succeeds — vision is best-effort enrichment, never a hard requirement.
+ */
+async function enrichImageResult(result: ExtractionResult, router?: SmartRouter): Promise<void> {
+  if (!router) return;
+  // The image extractor emits a base64 payload as a `thumbnail` preview; that's
+  // the raster data we hand to the vision model.
+  if (result.preview?.type !== 'thumbnail' || !result.preview.data) return;
+
+  const description = await describeImage(result.preview.data, result.metadata.mime, router);
+  if (description) {
+    result.content = { type: 'text', text: description };
   }
 }

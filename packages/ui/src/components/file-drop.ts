@@ -135,6 +135,28 @@ export class KairosFileDrop extends LitElement {
     }
     .clear-btn:hover { color: var(--bright-white); background: var(--w6); }
 
+    .thumb {
+      display: flex;
+      justify-content: center;
+      padding: 14px;
+      background: var(--w6);
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .thumb img {
+      max-width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: var(--radius);
+      /* Checkerboard so transparent PNGs read as transparent, not invisible. */
+      background-image:
+        linear-gradient(45deg, var(--w5) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--w5) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--w5) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--w5) 75%);
+      background-size: 16px 16px;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    }
+
     .snippet {
       margin: 0;
       padding: 12px 14px;
@@ -258,11 +280,22 @@ export class KairosFileDrop extends LitElement {
           </div>
           <button class="clear-btn" @click=${this.clear} aria-label="Clear">${icon.close(16)}</button>
         </div>
+        ${this.renderThumbnail(result)}
         ${content.type === 'structured'
           ? this.renderTable(result)
           : html`<pre class="snippet">${this.snippetText(result)}</pre>`}
       </div>
     `;
+  }
+
+  // Images come back with a `thumbnail` preview carrying the raster base64. Show
+  // it above the extracted text (which, for images, is the vision-model
+  // description when a vision provider is configured, else a placeholder).
+  private renderThumbnail(result: ExtractionResult) {
+    const preview = result.preview;
+    if (preview?.type !== 'thumbnail' || !preview.data) return nothing;
+    const src = `data:${result.metadata.mime};base64,${preview.data}`;
+    return html`<div class="thumb"><img src=${src} alt=${result.metadata.filename ?? 'uploaded image'} /></div>`;
   }
 
   // Show the extracted text, but cap it so a huge document doesn't blow out the

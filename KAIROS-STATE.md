@@ -149,6 +149,14 @@ npm run desktop:build  # Produce .dmg / .deb / .msi
   half ships as `<kairos-file-drop>` (drag-drop upload → extract → table/snippet
   preview) in the **Files** tab, backed by `services/file-extract.ts`; both are
   unit-tested (`file-extract.test.ts`, `file-drop-style.test.ts`).
+- **Image vision (Task 14)**: image uploads are enriched with a vision-model
+  description server-side. `SmartRouter.selectModel` accepts `requireCapability`
+  (e.g. `'vision'`); `packages/server/src/files/vision.ts` (`describeImage`) runs the
+  base64 image through a vision-capable provider after extraction, gracefully
+  degrading to the placeholder when none is configured. `@kairos/files` stays
+  provider-free — the vision call lives in the server layer. The UI renders the
+  image thumbnail above its description. (Deferred: real downscaled raster
+  thumbnails — needs a new image lib, not yet added.)
 
 ## Auth Architecture (Post-Decoupling)
 

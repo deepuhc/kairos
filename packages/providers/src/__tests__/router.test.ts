@@ -90,6 +90,38 @@ describe('SmartRouter', () => {
       const selection = await defaultRouter.selectModel();
       expect(selection!.model.id).toBe('qwen2.5:7b');
     });
+
+    it('only returns a vision-capable model when requireCapability is vision', async () => {
+      // The registry has local Ollama models (no vision) + Anthropic Claude
+      // models (vision). Requiring vision must exclude the text-only locals.
+      const selection = await router.selectModel({ requireCapability: 'vision' });
+      expect(selection).not.toBeNull();
+      const model = selection!.model;
+      expect(model.capabilities?.includes('vision') || model.supportsVision).toBe(true);
+    });
+
+    it('returns null for requireCapability when no model advertises it', async () => {
+      // Build a registry whose only available model is text-only, so the result
+      // is deterministic regardless of any provider API keys in the environment.
+      const textOnly: ModelInfo = {
+        id: 'text-model', name: 'Text Only', provider: 'fake', isLocal: true,
+        capabilities: ['chat', 'code'],
+      };
+      const fakeProvider = {
+        name: 'fake', isLocal: true,
+        isAvailable: async () => true,
+        listModels: async () => [textOnly],
+        complete: async () => ({ content: '', model: 'text-model' }),
+        async *stream() {},
+      };
+      const emptyRegistry = new ProviderRegistry({});
+      for (const p of [...emptyRegistry.all]) emptyRegistry.removeProvider(p.name);
+      emptyRegistry.addProvider(fakeProvider);
+      const fakeRouter = new SmartRouter(emptyRegistry);
+
+      expect(await fakeRouter.selectModel()).not.toBeNull(); // text model IS selectable
+      expect(await fakeRouter.selectModel({ requireCapability: 'vision' })).toBeNull();
+    });
   });
 
   describe('complete', () => {

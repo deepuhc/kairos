@@ -60,4 +60,17 @@ describe('kairos-file-drop', () => {
     expect(source).toContain('MAX_TABLE_ROWS');
     expect(source).toContain('more row');
   });
+
+  it('renders an image thumbnail from a thumbnail-type preview', () => {
+    expect(source).toContain('renderThumbnail');
+    expect(source).toContain("preview?.type !== 'thumbnail'");
+    // Builds a data: URL from the base64 preview payload for an <img>.
+    expect(source).toContain('data:${result.metadata.mime};base64,');
+    expect(source).toContain('<img');
+    expect(source).toMatch(/alt=/);
+  });
+
+  it('bounds the thumbnail height so a large image does not dominate the view', () => {
+    expect(cssRule('.thumb img')).toContain('max-height');
+  });
 });

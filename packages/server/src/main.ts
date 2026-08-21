@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { AgentPool } from '@kairos/agents';
-import { ProviderRegistry } from '@kairos/providers';
+import { ProviderRegistry, SmartRouter } from '@kairos/providers';
 import { PipelineEngine, parsePlan } from '@kairos/orchestrator';
 import type { PhaseDefinition, ExecutionContext } from '@kairos/orchestrator';
 import { WebSocketHub } from './ws/hub.js';
@@ -29,6 +29,7 @@ if (existsSync(uiDist)) {
 
 // --- Services ---
 const registry = new ProviderRegistry();
+const router = new SmartRouter(registry);
 const pool = new AgentPool();
 const pipelines = new Map<string, PipelineEngine>();
 
@@ -64,7 +65,9 @@ app.get('/api/pipelines', (_req, res) => {
 // Detect + extract an uploaded file. The client sends the file as base64 in the
 // JSON body; extraction runs locally (no cloud upload) via @kairos/files.
 app.post('/api/files/extract', async (req, res) => {
-  const { status, body } = await extractFileRequest(req.body);
+  // Pass the router so image uploads get enriched with a vision-model
+  // description when a vision-capable provider is configured.
+  const { status, body } = await extractFileRequest(req.body, { router });
   res.status(status).json(body);
 });
 

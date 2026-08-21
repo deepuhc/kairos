@@ -5,4 +5,4 @@ export { OpenAIProvider } from './openai.js';
 export { GeminiProvider } from './gemini.js';
 export { CustomHttpProvider, type CustomHttpConfig } from './custom-http.js';
 export { ProviderRegistry, type RegistryConfig } from './registry.js';
-export { SmartRouter, type RouterConfig } from './router.js';
+export { SmartRouter, type RouterConfig, type RouteOptions } from './router.js';

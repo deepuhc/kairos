@@ -1,5 +1,17 @@
-import type { Provider, ModelInfo, Message, CompletionOptions, CompletionResult } from './types.js';
+import type { Provider, ModelInfo, ModelCapability, Message, CompletionOptions, CompletionResult } from './types.js';
 import type { ProviderRegistry } from './registry.js';
+
+/** Options accepted by SmartRouter.selectModel and the routing helpers. */
+export interface RouteOptions {
+  complexity?: 'low' | 'medium' | 'high';
+  requireLocal?: boolean;
+  /**
+   * Require the selected model to advertise this capability (e.g. `'vision'`
+   * for image analysis). Applied before the privacy/budget/complexity rules;
+   * `selectModel` returns null if no available model qualifies.
+   */
+  requireCapability?: ModelCapability;
+}
 
 export interface RouterConfig {
   preferLocal?: boolean;
@@ -17,11 +29,21 @@ export class SmartRouter {
     this.config = config || {};
   }
 
-  async selectModel(options?: { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): Promise<{ provider: Provider; model: ModelInfo } | null> {
+  async selectModel(options?: RouteOptions): Promise<{ provider: Provider; model: ModelInfo } | null> {
     const models = await this.registry.listAllModels();
     if (models.length === 0) return null;
 
     let candidates = models;
+
+    // Rule 0: Capability — a hard requirement (e.g. vision). Applied first so a
+    // caller that needs an image-capable model never gets a text-only one.
+    if (options?.requireCapability) {
+      const cap = options.requireCapability;
+      candidates = candidates.filter(
+        (m) => m.capabilities?.includes(cap) || (cap === 'vision' && m.supportsVision === true)
+      );
+      if (candidates.length === 0) return null;
+    }
 
     // Rule 1: Privacy — if local required, filter to local only
     if (options?.requireLocal || this.config.preferLocal) {
@@ -68,15 +90,15 @@ export class SmartRouter {
     return { provider, model: selected };
   }
 
-  async complete(messages: Message[], options?: CompletionOptions & { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): Promise<CompletionResult> {
-    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal });
+  async complete(messages: Message[], options?: CompletionOptions & RouteOptions): Promise<CompletionResult> {
+    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal, requireCapability: options?.requireCapability });
     if (!selection) throw new Error('No available models');
 
     return selection.provider.complete(messages, { ...options, model: options?.model || selection.model.id });
   }
 
-  async *stream(messages: Message[], options?: CompletionOptions & { complexity?: 'low' | 'medium' | 'high'; requireLocal?: boolean }): AsyncIterable<string> {
-    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal });
+  async *stream(messages: Message[], options?: CompletionOptions & RouteOptions): AsyncIterable<string> {
+    const selection = await this.selectModel({ complexity: options?.complexity, requireLocal: options?.requireLocal, requireCapability: options?.requireCapability });
     if (!selection) throw new Error('No available models');
 
     yield* selection.provider.stream(messages, { ...options, model: options?.model || selection.model.id });

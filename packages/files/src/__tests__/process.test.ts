@@ -40,6 +40,21 @@ describe('processFile', () => {
     }
   });
 
+  it('routes a PNG through the image extractor with a base64 thumbnail preview', async () => {
+    // Minimal valid 1x1 PNG — magic bytes make detectMime classify it image/png.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMEAYH8pC0AAAAASUVORK5CYII=',
+      'base64',
+    );
+    const result = await processFile(png, 'dot.png');
+    expect(result.metadata.mime).toBe('image/png');
+    expect(result.preview?.type).toBe('thumbnail');
+    // The preview carries the image itself as base64 for <img> display; the
+    // content is a placeholder the server enriches via a vision model.
+    expect(result.preview?.data).toBe(png.toString('base64'));
+    expect(result.content.type).toBe('text');
+  });
+
   it('throws an unsupported FileProcessingError for binary octet-stream', async () => {
     // A NULL byte forces detection to application/octet-stream, which no
     // extractor handles.
