@@ -3,13 +3,21 @@
   "compilerOptions": {
     "composite": true
   },
+  // Every workspace package that has a tsconfig, in dependency order.
+  // `packages/desktop` is intentionally absent — it's a Rust/Tauri crate with no
+  // TypeScript sources.
   "references": [
-    { "path": "packages/core" },
+    { "path": "packages/protocol" },
+    { "path": "packages/shared" },
     { "path": "packages/providers" },
-    { "path": "packages/security" },
-    { "path": "packages/runtime" },
-    { "path": "packages/cli" },
-    { "path": "packages/test-utils" }
+    { "path": "packages/files" },
+    { "path": "packages/knowledge" },
+    { "path": "packages/personas" },
+    { "path": "packages/orchestrator" },
+    { "path": "packages/workflows" },
+    { "path": "packages/agents" },
+    { "path": "packages/server" },
+    { "path": "packages/ui" }
   ],
   "include": []
 }

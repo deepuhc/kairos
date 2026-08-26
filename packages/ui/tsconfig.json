@@ -14,5 +14,10 @@
     "rootDir": ".",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  // Tests are typechecked by Vitest, which resolves its own globals and (per
+  // vitest.config.ts) skips the suites covering CI-only tooling that isn't
+  // present in a plain checkout. Including them here would make `tsc -b` fail on
+  // those absent modules.
+  "exclude": ["src/__tests__"]
 }
