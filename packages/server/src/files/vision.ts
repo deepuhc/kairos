@@ -25,8 +25,21 @@ export function isVisionMime(mime: string): mime is ImageContent['mimeType'] {
 }
 
 /**
+ * A vision description plus attribution of which provider/model produced it and
+ * whether that model runs locally. The UI surfaces this so a user can see when
+ * an image was sent to a cloud model rather than analyzed on-device.
+ */
+export interface VisionDescription {
+  text: string;
+  provider: string;
+  model: string;
+  isLocal: boolean;
+}
+
+/**
  * Run a base64 image through a vision-capable model and return its text
- * description, or `null` when the image can't/shouldn't be analyzed:
+ * description with provider attribution, or `null` when the image can't/shouldn't
+ * be analyzed:
  *   - the MIME type isn't a supported raster type,
  *   - the base64 payload is empty or over the size cap,
  *   - no vision-capable model is configured/available, or
@@ -40,7 +53,7 @@ export async function describeImage(
   base64: string,
   mime: string,
   router: SmartRouter,
-): Promise<string | null> {
+): Promise<VisionDescription | null> {
   if (!isVisionMime(mime)) return null;
   if (!base64 || base64.length > MAX_BASE64_LENGTH) return null;
 
@@ -65,7 +78,13 @@ export async function describeImage(
   try {
     const result = await selection.provider.complete(messages, { model: selection.model.id });
     const text = result.content?.trim();
-    return text ? text : null;
+    if (!text) return null;
+    return {
+      text,
+      provider: selection.provider.name,
+      model: selection.model.id,
+      isLocal: selection.model.isLocal,
+    };
   } catch {
     return null;
   }

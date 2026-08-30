@@ -1,6 +1,6 @@
 import { processFile, FileProcessingError, type ExtractionResult } from '@kairos/files';
 import type { SmartRouter } from '@kairos/providers';
-import { describeImage } from './vision.js';
+import { describeImage, type VisionDescription } from './vision.js';
 
 /** Optional collaborators the extract path can use to enrich a result. */
 export interface ExtractDeps {
@@ -21,9 +21,22 @@ export interface ExtractResponse {
   body: ExtractOk | ExtractErr;
 }
 
+/**
+ * Attribution for an AI-generated image description. `isLocal: false` means the
+ * image was sent to a cloud vision model — the UI uses this to tell the user
+ * where their image went rather than implying it stayed on-device.
+ */
+export interface ImageAnalysis {
+  provider: string;
+  model: string;
+  isLocal: boolean;
+}
+
 interface ExtractOk {
   ok: true;
   result: ExtractionResult;
+  /** Present only when an image was enriched by a vision model. */
+  analysis?: ImageAnalysis;
 }
 
 interface ExtractErr {
@@ -71,8 +84,8 @@ export async function extractFileRequest(body: ExtractRequestBody, deps: Extract
 
   try {
     const result = await processFile(buffer, filename);
-    await enrichImageResult(result, deps.router);
-    return { status: 200, body: { ok: true, result } };
+    const analysis = await enrichImageResult(result, deps.router);
+    return { status: 200, body: { ok: true, result, ...(analysis ? { analysis } : {}) } };
   } catch (err) {
     if (err instanceof FileProcessingError) {
       // Unsupported type is a client problem (415); a failed extraction of a
@@ -90,18 +103,28 @@ export async function extractFileRequest(body: ExtractRequestBody, deps: Extract
 /**
  * If the extraction is an image and a vision-capable router is available, run
  * the image through a vision model and replace its placeholder `content` text
- * with a real description. Mutates `result` in place. On any failure or when no
- * vision model exists, the result is left untouched so extraction still
- * succeeds — vision is best-effort enrichment, never a hard requirement.
+ * with a real description. Mutates `result` in place and returns the analyzing
+ * model's attribution (so the caller can tell the user where the image went),
+ * or `undefined` when no enrichment happened. On any failure or when no vision
+ * model exists, the result is left untouched so extraction still succeeds —
+ * vision is best-effort enrichment, never a hard requirement.
  */
-async function enrichImageResult(result: ExtractionResult, router?: SmartRouter): Promise<void> {
-  if (!router) return;
+async function enrichImageResult(
+  result: ExtractionResult,
+  router?: SmartRouter,
+): Promise<ImageAnalysis | undefined> {
+  if (!router) return undefined;
   // The image extractor emits a base64 payload as a `thumbnail` preview; that's
   // the raster data we hand to the vision model.
-  if (result.preview?.type !== 'thumbnail' || !result.preview.data) return;
+  if (result.preview?.type !== 'thumbnail' || !result.preview.data) return undefined;
 
-  const description = await describeImage(result.preview.data, result.metadata.mime, router);
-  if (description) {
-    result.content = { type: 'text', text: description };
-  }
+  const description: VisionDescription | null = await describeImage(
+    result.preview.data,
+    result.metadata.mime,
+    router,
+  );
+  if (!description) return undefined;
+
+  result.content = { type: 'text', text: description.text };
+  return { provider: description.provider, model: description.model, isLocal: description.isLocal };
 }

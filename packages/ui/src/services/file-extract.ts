@@ -47,6 +47,23 @@ export interface ExtractionResult {
   metadata: ExtractedMetadata;
 }
 
+/**
+ * Attribution for an AI-generated image description. `isLocal: false` means the
+ * image was analyzed by a cloud vision model — surfaced in the UI so a user can
+ * see when their image left the machine.
+ */
+export interface ImageAnalysis {
+  provider: string;
+  model: string;
+  isLocal: boolean;
+}
+
+/** An extraction result plus optional vision-model attribution for images. */
+export interface ExtractionOutcome {
+  result: ExtractionResult;
+  analysis?: ImageAnalysis;
+}
+
 export type ExtractErrorReason = 'invalid' | 'unsupported' | 'extract' | 'network';
 
 /** A failed extraction, carrying the same `reason` the server assigns. */
@@ -68,7 +85,7 @@ export const MAX_FILE_BYTES = 18 * 1024 * 1024;
 
 // Shape the server sends back from POST /api/files/extract.
 type ExtractResponseBody =
-  | { ok: true; result: ExtractionResult }
+  | { ok: true; result: ExtractionResult; analysis?: ImageAnalysis }
   | { ok: false; error: string; reason: 'invalid' | 'unsupported' | 'extract' };
 
 /** Strip a `data:<mime>;base64,` prefix, leaving the bare base64 payload. */
@@ -78,13 +95,18 @@ export function stripDataUrl(content: string): string {
 }
 
 /**
- * Map a server response (status + parsed JSON body) to a result or a typed
- * error. Pure, so the status→reason mapping is unit-testable without a network.
+ * Map a server response (status + parsed JSON body) to a full outcome (result +
+ * optional vision attribution) or a typed error. Pure, so the status→reason
+ * mapping is unit-testable without a network.
  */
-export function mapExtractResponse(status: number, body: unknown): ExtractionResult {
-  const b = (body ?? {}) as Partial<ExtractResponseBody> & { error?: string; reason?: string };
+export function mapExtractOutcome(status: number, body: unknown): ExtractionOutcome {
+  const b = (body ?? {}) as Partial<ExtractResponseBody> & {
+    error?: string;
+    reason?: string;
+    analysis?: ImageAnalysis;
+  };
   if (status === 200 && b.ok === true && b.result) {
-    return b.result;
+    return b.analysis ? { result: b.result, analysis: b.analysis } : { result: b.result };
   }
   const message = typeof b.error === 'string' && b.error ? b.error : `Extraction failed (HTTP ${status}).`;
   const reason: ExtractErrorReason =
@@ -96,6 +118,15 @@ export function mapExtractResponse(status: number, body: unknown): ExtractionRes
           ? 'invalid'
           : 'extract';
   throw new FileExtractError(message, reason, status);
+}
+
+/**
+ * Map a server response to just the {@link ExtractionResult}, discarding vision
+ * attribution. Kept for callers that only need the result; new code that wants
+ * attribution should use {@link mapExtractOutcome}.
+ */
+export function mapExtractResponse(status: number, body: unknown): ExtractionResult {
+  return mapExtractOutcome(status, body).result;
 }
 
 /** A short, human-readable label for an error reason (for toasts/inline text). */
@@ -149,7 +180,7 @@ export function readFileAsBase64(file: File): Promise<string> {
  * Throws {@link FileExtractError} on any non-200 (mapped by reason) or a network
  * failure.
  */
-export async function extractContent(content: string, filename?: string): Promise<ExtractionResult> {
+export async function extractContent(content: string, filename?: string): Promise<ExtractionOutcome> {
   let res: Response;
   try {
     res = await fetchWithAuth('/api/files/extract', {
@@ -161,11 +192,11 @@ export async function extractContent(content: string, filename?: string): Promis
     throw new FileExtractError('Could not reach the server.', 'network');
   }
   const body = await res.json().catch(() => ({}));
-  return mapExtractResponse(res.status, body);
+  return mapExtractOutcome(res.status, body);
 }
 
-/** Read a File, upload it, and return the extracted result. */
-export async function extractFile(file: File): Promise<ExtractionResult> {
+/** Read a File, upload it, and return the extracted result + vision attribution. */
+export async function extractFile(file: File): Promise<ExtractionOutcome> {
   if (file.size === 0) {
     throw new FileExtractError('That file is empty.', 'invalid');
   }

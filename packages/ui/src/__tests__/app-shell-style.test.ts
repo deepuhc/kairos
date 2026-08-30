@@ -29,6 +29,15 @@ describe('app shell styles', () => {
     expect(cssRule('.auth-banner')).toContain('flex: none');
   });
 
+  it('Files-view copy does not falsely claim no cloud upload (images may use cloud vision)', () => {
+    // The vision path can send images to a cloud provider when no local vision
+    // model is configured, so the Files blurb must not promise otherwise.
+    expect(source).not.toMatch(/no cloud upload/i);
+    expect(source).not.toMatch(/never leaves the machine/i);
+    // It should still make clear text extraction is local.
+    expect(source).toMatch(/Text extraction runs locally/i);
+  });
+
   it('preserves full-bleed Agents layout and measured page width for other views', () => {
     const fullBleed = cssRule('main.full-bleed');
     expect(fullBleed).toContain('padding: 0');

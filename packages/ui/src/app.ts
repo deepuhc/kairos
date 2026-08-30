@@ -1149,7 +1149,7 @@ export class DevaiApp extends LitElement {
         return html`
           <div class="placeholder-view">
             <h2>Files</h2>
-            <p>Drop a file to detect its type and extract its contents locally — no cloud upload. Text, code, JSON, CSV and spreadsheets are supported.</p>
+            <p>Drop a file to detect its type and extract its contents. Text extraction runs locally. Images are described by a vision model — which may be a cloud provider if no local one is configured; the analyzing model is shown with each result.</p>
             <div class="files-upload"><kairos-file-drop></kairos-file-drop></div>
           </div>`;
       case 'prompts':

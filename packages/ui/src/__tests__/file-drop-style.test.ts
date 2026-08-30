@@ -73,4 +73,19 @@ describe('kairos-file-drop', () => {
   it('bounds the thumbnail height so a large image does not dominate the view', () => {
     expect(cssRule('.thumb img')).toContain('max-height');
   });
+
+  it('renders vision attribution with a local/cloud badge and the model', () => {
+    expect(source).toContain('renderAttribution');
+    // The badge distinguishes an on-device model from a cloud provider.
+    expect(source).toContain("a.isLocal ? 'Local' : 'Cloud'");
+    // Names the analyzing provider + model so it is never ambiguous.
+    expect(source).toContain('${a.provider}');
+    expect(source).toContain('${a.model}');
+    expect(cssRule('.attribution .badge.cloud')).toContain('color');
+  });
+
+  it('never claims uploads stay on the machine (would be false for cloud vision)', () => {
+    expect(source).not.toMatch(/never leaves the machine/i);
+    expect(source).not.toMatch(/no cloud upload/i);
+  });
 });

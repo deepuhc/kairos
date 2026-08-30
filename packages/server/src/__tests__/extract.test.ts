@@ -9,15 +9,20 @@ const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMEAYH8pC0AAAAASUVORK5CYII=';
 
 // A stand-in SmartRouter whose vision model returns a fixed description.
-function visionRouter(description: string, capture?: (args: unknown[]) => void): SmartRouter {
+function visionRouter(
+  description: string,
+  capture?: (args: unknown[]) => void,
+  opts: { providerName?: string; modelId?: string; isLocal?: boolean } = {},
+): SmartRouter {
+  const { providerName = 'mock', modelId = 'mock-vision', isLocal = true } = opts;
   const complete = vi.fn(async (...args: unknown[]) => {
     capture?.(args);
-    return { content: description, model: 'mock-vision' };
+    return { content: description, model: modelId };
   });
   return {
     selectModel: vi.fn(async () => ({
-      provider: { complete } as never,
-      model: { id: 'mock-vision', capabilities: ['vision'] } as never,
+      provider: { name: providerName, complete } as never,
+      model: { id: modelId, isLocal, capabilities: ['vision'] } as never,
     })),
   } as unknown as SmartRouter;
 }
@@ -101,6 +106,38 @@ describe('extractFileRequest', () => {
       expect(imagePart?.data).toBe(PNG_B64);
       // The thumbnail preview is preserved for <img> display.
       expect(res.body.ok && res.body.result.preview?.type).toBe('thumbnail');
+    });
+
+    it('surfaces local vision attribution alongside the description', async () => {
+      const router = visionRouter('A white pixel.', undefined, {
+        providerName: 'ollama',
+        modelId: 'llava:13b',
+        isLocal: true,
+      });
+      const res = await extractFileRequest({ content: PNG_B64, filename: 'dot.png' }, { router });
+      expect(res.status).toBe(200);
+      expect(res.body.ok && res.body.analysis).toEqual({
+        provider: 'ollama',
+        model: 'llava:13b',
+        isLocal: true,
+      });
+    });
+
+    it('marks a cloud vision model as not local in the attribution', async () => {
+      const router = visionRouter('A white pixel.', undefined, {
+        providerName: 'gemini',
+        modelId: 'gemini-2.0-flash',
+        isLocal: false,
+      });
+      const res = await extractFileRequest({ content: PNG_B64, filename: 'dot.png' }, { router });
+      expect(res.status).toBe(200);
+      expect(res.body.ok && res.body.analysis).toMatchObject({ provider: 'gemini', isLocal: false });
+    });
+
+    it('omits attribution when no image enrichment happened', async () => {
+      const res = await extractFileRequest({ content: b64('plain text'), filename: 'a.txt' });
+      expect(res.status).toBe(200);
+      expect(res.body.ok && res.body.analysis).toBeUndefined();
     });
 
     it('leaves the placeholder untouched when no router is provided', async () => {

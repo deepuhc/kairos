@@ -7,13 +7,16 @@ import {
   formatBytes,
   FileExtractError,
   type ExtractionResult,
+  type ImageAnalysis,
 } from '../services/file-extract.js';
 
 // Drag-drop (or click-to-browse) file upload that runs the file through the
-// server's local extraction pipeline (POST /api/files/extract) and renders a
-// preview — a text snippet, a table for spreadsheets/CSV, or a metadata card.
-// Extraction happens server-side and never leaves the machine; the browser only
-// renders the JSON it gets back.
+// server's extraction pipeline (POST /api/files/extract) and renders a preview
+// — a text snippet, a table for spreadsheets/CSV, or a metadata card. Text
+// extraction runs on the server, locally. Images are additionally described by
+// a vision model, which may be a CLOUD provider when no local one is configured
+// — so we surface the analyzing model with the result rather than implying the
+// image stayed on-device.
 //
 // Emits a `file-extracted` CustomEvent (bubbling, composed) with the
 // ExtractionResult so a host view can consume it (e.g. attach to a prompt).
@@ -25,6 +28,7 @@ export class KairosFileDrop extends LitElement {
   @state() private status: Status = 'idle';
   @state() private dragging = false;
   @state() private result: ExtractionResult | null = null;
+  @state() private analysis: ImageAnalysis | null = null;
   @state() private error = '';
   @state() private currentName = '';
 
@@ -157,6 +161,28 @@ export class KairosFileDrop extends LitElement {
       background-position: 0 0, 0 8px, 8px -8px, -8px 0;
     }
 
+    /* Vision attribution — tells the user which model described the image and,
+       critically, whether it ran locally or was sent to a cloud provider. */
+    .attribution {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      font-size: var(--font-size-xs);
+      border-bottom: 1px solid var(--glass-border);
+      background: var(--w6);
+      color: var(--gray);
+    }
+    .attribution .badge {
+      font-weight: 600;
+      padding: 1px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+    .attribution .badge.local { background: var(--success-a15, rgba(34,197,94,0.15)); color: var(--success, #22c55e); }
+    .attribution .badge.cloud { background: var(--warning-a15, rgba(234,179,8,0.15)); color: var(--warning, #eab308); }
+    .attribution .model { color: var(--bright-white); font-family: var(--font-mono, monospace); }
+
     .snippet {
       margin: 0;
       padding: 12px 14px;
@@ -245,9 +271,11 @@ export class KairosFileDrop extends LitElement {
     this.status = 'extracting';
     this.error = '';
     this.result = null;
+    this.analysis = null;
     try {
-      const result = await extractFile(file);
+      const { result, analysis } = await extractFile(file);
       this.result = result;
+      this.analysis = analysis ?? null;
       this.status = 'done';
       this.dispatchEvent(
         new CustomEvent('file-extracted', { detail: result, bubbles: true, composed: true }),
@@ -263,6 +291,7 @@ export class KairosFileDrop extends LitElement {
   private clear() {
     this.status = 'idle';
     this.result = null;
+    this.analysis = null;
     this.error = '';
     this.currentName = '';
   }
@@ -281,9 +310,24 @@ export class KairosFileDrop extends LitElement {
           <button class="clear-btn" @click=${this.clear} aria-label="Clear">${icon.close(16)}</button>
         </div>
         ${this.renderThumbnail(result)}
+        ${this.renderAttribution()}
         ${content.type === 'structured'
           ? this.renderTable(result)
           : html`<pre class="snippet">${this.snippetText(result)}</pre>`}
+      </div>
+    `;
+  }
+
+  // When an image was described by a vision model, show which one and whether it
+  // ran locally or in the cloud — so "extracted" never quietly means "uploaded
+  // to a third party".
+  private renderAttribution() {
+    const a = this.analysis;
+    if (!a) return nothing;
+    return html`
+      <div class="attribution">
+        <span class="badge ${a.isLocal ? 'local' : 'cloud'}">${a.isLocal ? 'Local' : 'Cloud'}</span>
+        <span>Image described by <span class="model">${a.provider} · ${a.model}</span></span>
       </div>
     `;
   }

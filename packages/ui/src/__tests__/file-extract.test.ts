@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   stripDataUrl,
   mapExtractResponse,
+  mapExtractOutcome,
   extractErrorLabel,
   formatBytes,
   FileExtractError,
@@ -74,6 +75,30 @@ describe('mapExtractResponse', () => {
 
   it('treats a 200 without ok:true as an error', () => {
     expect(() => mapExtractResponse(200, { ok: false })).toThrow(FileExtractError);
+  });
+});
+
+describe('mapExtractOutcome', () => {
+  const okResult: ExtractionResult = {
+    content: { type: 'text', text: 'hi' },
+    metadata: { mime: 'text/plain', size: 2, extractedAt: '2026-08-19T00:00:00Z' },
+  };
+
+  it('returns just the result when the body carries no analysis', () => {
+    expect(mapExtractOutcome(200, { ok: true, result: okResult })).toEqual({ result: okResult });
+  });
+
+  it('passes through vision attribution when present', () => {
+    const analysis = { provider: 'gemini', model: 'gemini-2.0-flash', isLocal: false };
+    expect(mapExtractOutcome(200, { ok: true, result: okResult, analysis })).toEqual({
+      result: okResult,
+      analysis,
+    });
+  });
+
+  it('throws the same typed error as mapExtractResponse on failure', () => {
+    expect(() => mapExtractOutcome(415, { ok: false, error: 'no extractor', reason: 'unsupported' }))
+      .toThrow(FileExtractError);
   });
 });
 
