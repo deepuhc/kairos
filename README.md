@@ -12,58 +12,55 @@ Kairos orchestrates multiple AI agents across any LLM (local or cloud) for any d
 - **npm 9+** — `npm --version`
 - **Ollama** (optional, for free local AI) — https://ollama.ai
 
-### Install
+### Install and run
 
 ```bash
-cd ~/projects/kairos
+git clone https://github.com/deepuhc/kairos.git
+cd kairos
 npm install
-```
-
-### Run Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:ci
-
-# Run a specific package's tests
-npx vitest run packages/security/src
-npx vitest run packages/core/src
-npx vitest run packages/providers/src
-```
-
-### Build
-
-```bash
 npm run build
+npm start           # → http://localhost:3333
 ```
 
-### Try the CLI
+`npm start` runs the standalone Express server, which also serves the built UI.
+Override the port with `PORT=4000 npm start`.
+
+Or, in one command — builds, starts the server, and opens your browser:
 
 ```bash
-# Check what's available
-npx kairos status
+npm run kairos
+```
 
-# Dry-run a recipe (shows phases without executing)
-npx kairos run recipes/code-review.yaml --dry-run
+### Development (hot reload)
 
-# Start interactive session
-npx kairos start
+```bash
+npm run dev         # server (tsx watch) + UI (vite on :5173)
+```
 
-# Start with local model only (free, private)
-npx kairos start --local
+### Desktop app
 
-# Start with specific provider
-npx kairos start --provider ollama/llama3.2
-npx kairos start --provider anthropic/claude-sonnet-4-6
+Requires the [Rust toolchain](https://rustup.rs) in addition to Node:
 
-# Start with budget limit
-npx kairos start --budget 5.00
+```bash
+npm run desktop:dev      # Tauri dev mode
+npm run desktop:build    # produce .dmg / .deb / .msi
+```
 
-# Start with security profile
-npx kairos start --profile tax-firm
+`desktop:build` bundles the server into a single self-contained JS file and ships
+it (plus the built UI) as Tauri resources. At launch the app spawns that server on
+a free port and points its window at it — so **Node 20+ must be installed on the
+target machine** (the JS server runs on the system's Node; a Node runtime is not
+embedded). If Node is missing, the app shows a startup-error page instead of
+crashing.
+
+### Tests and typecheck
+
+```bash
+npm test                              # watch mode
+npx vitest run                        # single run, all packages
+npx vitest run packages/providers     # one package
+npm run test:ci                       # with coverage
+npm run typecheck                     # tsc -b across all packages
 ```
 
 ## Setting Up LLM Providers
@@ -145,6 +142,9 @@ curl -s http://localhost:3333/api/providers/diagnostics
 This reports each provider's resolved endpoint, whether it is reachable, and which of its
 models are vision-capable.
 
+For a full walkthrough — Tailscale/LAN setup, all config fields, and enabling
+local image description — see [docs/homelab.md](docs/homelab.md).
+
 ### Option 2: Anthropic (Claude)
 
 Best for: complex reasoning, high-quality output.
@@ -176,105 +176,86 @@ Kairos uses all available providers simultaneously:
 ```
 kairos/
 ├── packages/
-│   ├── security/     Data classification, PII redaction, audit logging
-│   ├── core/         Orchestration engine, scheduler, patterns, gates
-│   ├── providers/    LLM adapters (Ollama, OpenAI, Anthropic, router)
-│   ├── runtime/      Agent process management, isolation
-│   ├── cli/          CLI commands + TUI (terminal UI)
-│   └── test-utils/   Mock providers, test factories
-├── recipes/          YAML workflow definitions
-├── PLAN.md           Full strategic plan & architecture
-├── DESIGN.md         Design philosophy & visual identity
-└── TESTING.md        Test strategy for dual audiences
+│   ├── protocol/      ACP types + JSON-RPC 2.0 codec (zero deps)
+│   ├── shared/        Themes, design tokens, constants
+│   ├── providers/     LLM adapters (Ollama, OpenAI, Anthropic) + SmartRouter
+│   ├── files/         File type detection + extraction (standalone)
+│   ├── knowledge/     Knowledge/context helpers
+│   ├── personas/      Agent role/persona definitions
+│   ├── orchestrator/  DAG engine, pipeline state machine, plan parser
+│   ├── workflows/     Reusable workflow definitions
+│   ├── agents/        Agent process lifecycle, CLI + Ollama adapters, pool
+│   ├── server/        Express backend + WebSocket hub (standalone)
+│   ├── ui/            Lit 3 web components (the frontend)
+│   └── desktop/       Tauri 2 shell (sidecar wrapper)
 ```
 
-## Writing a Recipe
+## Writing a Plan
 
-Recipes are YAML files that define multi-agent workflows:
+Plans are **Markdown**. Each task is a checklist item `id: description`, with
+optional inline annotations for dependencies, role, and gates. `parsePlan()`
+(in `@kairos/orchestrator`) turns them into a `PipelineDefinition` DAG the engine
+executes — ready phases run in parallel, and gates pause for human approval.
 
-```yaml
-name: "My Workflow"
-description: "What it does"
-version: 1
+```markdown
+# Research and Summarize
 
-providers:
-  default: ollama/llama3.2     # free local model
-  complex: anthropic/claude-sonnet-4-6  # for hard tasks
-
-budget:
-  max_cost: 2.00               # stop if cost exceeds this
-
-agents:
-  - id: researcher
-    role: "Research the topic thoroughly"
-    model: ${providers.default}
-
-  - id: writer
-    role: "Write a clear summary from research findings"
-    model: ${providers.default}
-
-pipeline:
-  - phase: research
-    pattern: parallel           # run all at once
-    agents: [researcher]
-
-  - phase: write
-    pattern: sequential         # one after another
-    agents: [writer]
-    gate:
-      type: human_approval
-      message: "Ready to write the summary. Proceed?"
+- [ ] research: Research the topic thoroughly [role: researcher]
+- [ ] review: Approve the research before writing [type: gate]
+- [ ] write: Write a clear summary from the findings [role: writer] [depends: research, review]
 ```
 
-### Available Patterns
+Supported annotations:
 
-| Pattern | Description | When to Use |
-|---------|-------------|-------------|
-| `sequential` | A → B → C | Ordered steps with dependencies |
-| `parallel` | All at once, collect results | Independent sub-tasks |
-| `hierarchical` | Manager delegates to workers | Complex decomposition |
-| `handoff` | Router picks one specialist | Multi-domain routing |
-| `loop` | Repeat until quality threshold | Iterative refinement |
+| Annotation | Meaning |
+|------------|---------|
+| `[depends: a, b]` | This phase waits for phases `a` and `b` |
+| `[role: X]` | Run the phase under role/persona `X` |
+| `[type: gate]` | Pause for human approval (uses the description as the prompt) |
+| `[type: fanout]` | Fan the phase out across inputs |
 
-## Security Profiles
+## Privacy-Aware Routing
 
-```bash
-kairos start --profile personal    # relaxed, cloud allowed
-kairos start --profile tax-firm    # strict, local-only, 7yr audit
-kairos start --profile healthcare  # HIPAA aligned
-kairos start --profile education   # FERPA aligned
-kairos start --profile enterprise  # SOC 2 aligned
-```
+`SmartRouter` selects a model per request, preferring local models for
+privacy-sensitive work and falling back to cloud providers only when allowed.
+Mark a homelab endpoint `isLocal: true` in `~/.kairos/providers.json` (see
+[Remote / homelab Ollama](#remote--homelab-ollama)) so it is treated as private.
+
+File handling follows the same principle: **text extraction runs locally** on
+the server. **Image description uses a vision model**, which may be a cloud
+provider if no local vision model is configured — the analyzing provider/model
+is surfaced with each result rather than hidden. Pull a local vision model
+(`ollama pull moondream` or `ollama pull llava`) to keep images on-device.
 
 ## Development
 
 ```bash
-# Type check
+# Type check the whole workspace
 npm run typecheck
 
-# Clean builds
+# Clean builds + node_modules
 npm run clean
 
-# Watch mode (rebuilds on file change)
-cd packages/core && npx tsup --watch
+# Watch a single package (rebuilds on change)
+npm run dev -w @kairos/server
 
-# Run single test file
-npx vitest run packages/security/src/classifier.test.ts
+# Run one package's tests
+npx vitest run packages/providers
 
-# Run tests in watch mode
-npx vitest --watch
+# Watch mode
+npx vitest
 ```
 
 ## Architecture Decisions
 
 - **TypeScript monorepo** with npm workspaces
 - **ESM-first** (type: module everywhere)
-- **tsup** for fast builds
-- **Vitest** for testing
-- **Ink** (React for CLI) for TUI components
+- **tsup** for library builds, **Vite** for the UI
+- **Vitest** for testing (Node environment)
+- **Lit 3** web components for the frontend
 - **Event-sourced state** for pipeline execution (supports replay/debug)
-- **MCP protocol** for tool integration
-- **Security-first**: PII detection runs before every model call
+- **Web-first, desktop via sidecar**: the Express server is standalone; Tauri
+  spawns it and points a webview at it
 
 ## License
 
