@@ -14,7 +14,13 @@ import { extractFileRequest } from './files/extract.js';
 import { loadProvidersConfig, providersConfigPath } from './config/providers-config.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
-const __dirname = dirname(fileURLToPath(import.meta.url));
+// import.meta.url is undefined when this module is inlined into a CommonJS
+// bundle (the packaged desktop server), so fall back to process.cwd(). The
+// desktop bundle sets KAIROS_UI_DIST explicitly, so this fallback only affects
+// the default UI-dist guess, never the packaged app's actual UI location.
+const __dirname = import.meta.url
+  ? dirname(fileURLToPath(import.meta.url))
+  : process.cwd();
 
 const app = express();
 app.use(cors());
@@ -22,8 +28,11 @@ app.use(cors());
 // 100kb default. 25mb of base64 ≈ an ~18mb source file.
 app.use(express.json({ limit: '25mb' }));
 
-// Serve the UI if built
-const uiDist = join(__dirname, '..', '..', 'ui', 'dist');
+// Serve the UI if built. In a source checkout the UI lives at
+// packages/ui/dist relative to the server; in a packaged desktop bundle the
+// server is a single file with no fixed sibling layout, so KAIROS_UI_DIST lets
+// the Tauri shell point at the UI it shipped as a resource.
+const uiDist = process.env.KAIROS_UI_DIST || join(__dirname, '..', '..', 'ui', 'dist');
 if (existsSync(uiDist)) {
   app.use(express.static(uiDist));
 }

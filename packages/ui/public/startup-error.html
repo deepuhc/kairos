@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Polygent Startup Error</title>
+  <title>Kairos Startup Error</title>
   <style>
     body {
       margin: 0;
@@ -35,13 +35,15 @@
 </head>
 <body>
   <main>
-    <h1>Polygent could not start its local backend</h1>
-    <p>The desktop shell is still running, but the in-process Rust backend failed during startup. If this is a port conflict, stop the other Polygent instance or set <code>POLYGENT_PORT</code> before launching.</p>
+    <h1>Kairos could not start its local backend</h1>
+    <p>The desktop shell is running, but the Kairos server did not start. Kairos runs its
+    backend as a Node.js process, so <strong>Node 20+ must be installed and on your PATH</strong>.
+    Install it from <a href="https://nodejs.org">nodejs.org</a>, then relaunch Kairos.</p>
     <code id="detail"></code>
   </main>
   <script>
     document.getElementById('detail').textContent =
-      window.__POLYGENT_STARTUP_ERROR__ || 'Unknown startup error.';
+      window.__KAIROS_STARTUP_ERROR__ || 'Unknown startup error.';
   </script>
 </body>
 </html>
