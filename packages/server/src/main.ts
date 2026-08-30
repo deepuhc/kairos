@@ -3,7 +3,8 @@ import cors from 'cors';
 import { createServer } from 'node:http';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { AgentPool } from '@kairos/agents';
 import { ProviderRegistry, SmartRouter } from '@kairos/providers';
 import { PipelineEngine, parsePlan } from '@kairos/orchestrator';
@@ -14,6 +15,14 @@ import { extractFileRequest } from './files/extract.js';
 import { loadProvidersConfig, providersConfigPath } from './config/providers-config.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
+
+// Where submitted feedback is written. Honors KAIROS_CONFIG_DIR (same knob the
+// providers config uses) so a tester can redirect it; defaults to ~/.kairos.
+function feedbackDir(): string {
+  const base = process.env.KAIROS_CONFIG_DIR?.trim() || join(homedir(), '.kairos');
+  return join(base, 'feedback');
+}
+
 // import.meta.url is undefined when this module is inlined into a CommonJS
 // bundle (the packaged desktop server), so fall back to process.cwd(). The
 // desktop bundle sets KAIROS_UI_DIST explicitly, so this fallback only affects
@@ -116,6 +125,33 @@ app.post('/api/files/extract', async (req, res) => {
   // description when a vision-capable provider is configured.
   const { status, body } = await extractFileRequest(req.body, { router });
   res.status(status).json(body);
+});
+
+// Persist a feedback report to ~/.kairos/feedback/ so there is a durable local
+// copy regardless of how the tester relays it. Best-effort: a write failure
+// still returns ok so the UI can fall back to copy/paste. The body is the
+// already-formatted plain-text report from the UI plus the raw message.
+app.post('/api/feedback', async (req, res) => {
+  const body = (req.body ?? {}) as { report?: unknown; message?: unknown };
+  const report = typeof body.report === 'string' ? body.report : '';
+  if (!report.trim()) {
+    res.status(400).json({ ok: false, error: 'Missing "report" text.' });
+    return;
+  }
+  try {
+    const dir = join(feedbackDir());
+    mkdirSync(dir, { recursive: true });
+    // Sortable, filesystem-safe filename; no Date parsing needed to read later.
+    const name = `feedback-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    const file = join(dir, name);
+    writeFileSync(file, report, 'utf-8');
+    console.log(`  [feedback] saved ${file}`);
+    res.json({ ok: true, savedTo: file });
+  } catch (err) {
+    // Don't fail the tester's flow — they can still copy/paste the report.
+    console.warn(`  [feedback] could not save: ${err instanceof Error ? err.message : String(err)}`);
+    res.json({ ok: false, error: 'Could not save server-side; copy the report instead.' });
+  }
 });
 
 // SPA fallback

@@ -21,6 +21,8 @@ import './components/whats-new-panel.js';
 import './components/presence-pill.js';
 import './components/testimonials.js';
 import './components/file-drop.js';
+import './components/feedback-dialog.js';
+import { installErrorCapture } from './services/feedback-log.js';
 
 type View = 'agents' | 'files' | 'prompts' | 'plan' | 'review' | 'sessions' | 'customize' | 'settings';
 
@@ -112,6 +114,7 @@ export class DevaiApp extends LitElement {
   @state() private authLoggedIn = true;
   @state() private reloggingIn = false;
   @state() private windowMaximized = false;
+  @state() private feedbackOpen = false;
 
   static styles = [focusRing, css`
     :host {
@@ -437,6 +440,12 @@ export class DevaiApp extends LitElement {
       text-decoration: none;
       transition: all var(--transition-fast);
       white-space: nowrap;
+      /* Rendered as a <button>: strip the native chrome so it matches the
+         other header controls. */
+      border: none;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
     }
     .feedback-link:hover {
       background: var(--header-control-bg-hover);
@@ -777,6 +786,9 @@ export class DevaiApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    // Capture client errors early so a feedback report includes anything that
+    // went wrong before the tester opened the dialog.
+    installErrorCapture(window as never);
     this.syncPlatformAttributes();
     void this.installWindowsWindowStateTracking();
     // Agents is the default landing view, so mount its subtree on startup.
@@ -1201,6 +1213,12 @@ export class DevaiApp extends LitElement {
         @dismiss=${() => this.dismissWhatsNew()}
       ></kairos-whats-new>
       <kairos-testimonials .open=${this.testimonialsOpen} @close=${() => { this.testimonialsOpen = false; }}></kairos-testimonials>
+      <kairos-feedback-dialog
+        .open=${this.feedbackOpen}
+        .mode=${this.appMode}
+        .view=${this.view}
+        @close=${() => { this.feedbackOpen = false; }}
+      ></kairos-feedback-dialog>
     `;
   }
 
@@ -1342,14 +1360,13 @@ export class DevaiApp extends LitElement {
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.7 4.7 0 0 1 12 8"/><path d="M16.5 8a2.5 2.5 0 0 0 0-5A4.7 4.7 0 0 0 12 8"/></svg>
             </button>
-            <a
-              class="feedback-link"
-              href="https://github.com/user/kairos/issues"
-              target="_blank"
-              rel="noopener noreferrer"
-              ${tooltip('Report bugs and request enhancements')}
-            >Feedback</a>
           ` : nothing}
+          <button
+            class="feedback-link"
+            @click=${() => { this.feedbackOpen = true; }}
+            ${tooltip('Send feedback — builds a copyable report with diagnostics')}
+            aria-label="Send feedback"
+          >Feedback</button>
           <kairos-update-button></kairos-update-button>
           <kairos-user-menu></kairos-user-menu>
         </div>
