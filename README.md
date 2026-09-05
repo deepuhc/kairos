@@ -6,13 +6,34 @@ Kairos orchestrates multiple AI agents across any LLM (local or cloud) for any d
 
 ## Quick Start
 
-### Prerequisites
+Kairos runs anywhere Node runs — **macOS, Ubuntu/Linux, and Windows**. The steps
+below are the full install from a clean machine; they're written so you can hand
+them to Claude Code (or run them yourself) and get to `http://localhost:3333`.
 
-- **Node.js 20+** — `node --version`
-- **npm 9+** — `npm --version`
-- **Ollama** (optional, for free local AI) — https://ollama.ai
+### 1. Prerequisites
 
-### Install and run
+You need **Git** and **Node.js 20 or newer** (npm ships with Node). Check what
+you have:
+
+```bash
+node --version    # must be v20+
+npm --version
+git --version
+```
+
+If Node is missing or too old, install it:
+
+| OS | Install Node 20+ |
+|----|------------------|
+| **macOS** | `brew install node` — or the installer from <https://nodejs.org> |
+| **Ubuntu/Debian** | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| **Windows** | `winget install OpenJS.NodeJS.LTS` — or the installer from <https://nodejs.org> |
+
+(Ollama is optional, for free local AI — see [Setting Up LLM Providers](#setting-up-llm-providers).)
+
+### 2. Clone, install, build, run
+
+The commands are identical on macOS, Linux, and Windows (PowerShell or `cmd`):
 
 ```bash
 git clone https://github.com/deepuhc/kairos.git
@@ -22,14 +43,42 @@ npm run build
 npm start           # → http://localhost:3333
 ```
 
-`npm start` runs the standalone Express server, which also serves the built UI.
-Override the port with `PORT=4000 npm start`.
+Open <http://localhost:3333> in your browser. `npm start` runs the standalone
+Express server, which also serves the built UI. Override the port with:
 
-Or, in one command — builds, starts the server, and opens your browser:
+```bash
+# macOS / Linux
+PORT=4000 npm start
+# Windows (PowerShell)
+$env:PORT=4000; npm start
+```
+
+On **macOS or Linux** you can do build + start + open-browser in one command:
 
 ```bash
 npm run kairos
 ```
+
+(This uses a bash script; on Windows use `npm run build` then `npm start`, or run
+it from Git Bash / WSL.)
+
+### Troubleshooting a fresh install
+
+If `npm run build` fails with an error like **`Cannot find module @rollup/rollup-<platform>`**
+or **`@esbuild/<platform>`**, you've hit a known npm bug ([npm/cli#4828](https://github.com/npm/cli/issues/4828))
+where `npm install` skips the platform-specific native binaries. Fix it by
+reinstalling cleanly:
+
+```bash
+# macOS / Linux
+rm -rf node_modules && npm install
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force node_modules; npm install
+```
+
+Then re-run `npm run build`. (No need to delete `package-lock.json` — it's the
+source of truth and is committed.)
 
 ### Development (hot reload)
 
@@ -39,7 +88,22 @@ npm run dev         # server (tsx watch) + UI (vite on :5173)
 
 ### Desktop app
 
-Requires the [Rust toolchain](https://rustup.rs) in addition to Node:
+There are two ways to get a desktop app; see [docs/desktop-app.md](docs/desktop-app.md)
+for the full guide.
+
+**Standalone `.app` (macOS, no Rust) — easiest for sharing/testing:**
+
+```bash
+npm run app:build   # → packages/desktop/dist-app/Kairos-macos-<version>.zip
+```
+
+This assembles a self-contained `Kairos.app` (bundled server + UI + launcher) and
+zips it. Copy the zip to any Mac with **Node.js 20+**, unzip, right-click →
+**Open** (first launch only, it's unsigned). No Rust, no `npm install` on the
+target machine.
+
+**Full Tauri bundle (`.dmg` / `.deb` / `.msi`)** — a native installer, requires
+the [Rust toolchain](https://rustup.rs) in addition to Node:
 
 ```bash
 npm run desktop:dev      # Tauri dev mode
