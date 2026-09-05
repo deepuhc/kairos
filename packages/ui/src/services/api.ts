@@ -100,7 +100,44 @@ export interface UiUpdateStatus {
   error?: string;
 }
 
-export const getUiUpdateStatus = () => request<UiUpdateStatus>('/system/ui-update');
+// Git-based self-update, served by the standalone server (packages/server/src/update.ts).
+// `supported` is false when Kairos isn't running from a git clone.
+export interface GitUpdateStatus {
+  supported: boolean;
+  branch?: string;
+  currentCommit?: string;
+  currentCommitShort?: string;
+  behind?: number;
+  latestCommit?: string;
+  latestCommitShort?: string;
+  latestSubject?: string;
+  error?: string;
+}
+
+export const getGitUpdateStatus = () => request<GitUpdateStatus>('/update/status');
+
+export interface GitUpdateApplyResult {
+  ok: boolean;
+  updated: boolean;
+  fromCommit?: string;
+  toCommit?: string;
+  message: string;
+}
+
+export const applyGitUpdate = () =>
+  request<GitUpdateApplyResult>('/update/apply', { method: 'POST' });
+
+// Adapts the git-update status to the shape the update monitor consumes.
+export const getUiUpdateStatus = async (): Promise<UiUpdateStatus> => {
+  const s = await getGitUpdateStatus();
+  if (!s.supported) return { behind: 0 };
+  return {
+    behind: s.behind ?? 0,
+    current: s.currentCommitShort,
+    latest: s.latestCommitShort,
+    error: s.error,
+  };
+};
 
 export interface SelfUpdateStatus {
   available: boolean;

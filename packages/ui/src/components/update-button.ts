@@ -6,6 +6,7 @@ import {
   type KairosUpdateState,
 } from '../services/update-monitor.js';
 import { installDesktopUpdate } from '../services/desktop-updater.js';
+import { applyGitUpdate } from '../services/api.js';
 import { tooltip } from '../directives/tooltip.js';
 
 @customElement('kairos-update-button')
@@ -134,6 +135,14 @@ export class DevaiUpdateButton extends LitElement {
 
   private async installUpdate() {
     if (this.updating) return;
+    const notice = getKairosUpdateNotice(this.updateState);
+    // Git-based self-update: the standalone (browser) build updates by asking
+    // the server to fast-forward the clone, rebuild, and restart, then waits
+    // for it to come back and reloads.
+    if (notice?.kind === 'source') {
+      await this.installSourceUpdate();
+      return;
+    }
     this.updating = true;
     this.progress = 'Starting';
     try {
@@ -161,9 +170,67 @@ export class DevaiUpdateButton extends LitElement {
     }
   }
 
+  // Trigger a git-based self-update and wait for the rebuilt server to return.
+  private async installSourceUpdate() {
+    this.updating = true;
+    this.progress = 'Updating';
+    try {
+      const result = await applyGitUpdate();
+      if (!result.ok) {
+        this.updating = false;
+        this.progress = null;
+        alert(`Kairos update failed: ${result.message}`);
+        await updateMonitor.refreshNow();
+        return;
+      }
+      if (!result.updated) {
+        // Nothing to do — someone else already updated, or we raced.
+        this.updating = false;
+        this.progress = null;
+        await updateMonitor.refreshNow();
+        return;
+      }
+      // The server is now rebuilding + restarting (supervisor). Wait for it to
+      // accept requests again, then reload into the new build.
+      this.progress = 'Rebuilding';
+      const cameBack = await this.waitForServerBack();
+      if (cameBack) {
+        this.progress = 'Reloading';
+        window.location.reload();
+      } else {
+        this.updating = false;
+        this.progress = null;
+        alert('Kairos updated but is taking a while to restart. Reload the page in a moment.');
+      }
+    } catch (err: any) {
+      this.updating = false;
+      this.progress = null;
+      alert(`Kairos update failed: ${err?.message ?? String(err)}`);
+      await updateMonitor.refreshNow();
+    }
+  }
+
+  // Poll /api/health until the rebuilt server responds (rebuild = npm install +
+  // build, so allow a generous window), or give up after ~5 minutes.
+  private async waitForServerBack(timeoutMs = 300_000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    // Let the old process exit first so we don't get a false positive.
+    await new Promise((r) => setTimeout(r, 1500));
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch('/api/health', { cache: 'no-store' });
+        if (res.ok) return true;
+      } catch {
+        /* server still down — keep polling */
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    return false;
+  }
+
   render() {
     const notice = getKairosUpdateNotice(this.updateState);
-    if (!notice || notice.kind !== 'desktop') return nothing;
+    if (!notice) return nothing;
 
     const tooltipText = this.updating
       ? `Installing ${notice.ariaLabel}.`

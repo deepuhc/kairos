@@ -13,6 +13,7 @@ import { WebSocketHub } from './ws/hub.js';
 import type { ClientMessage } from './ws/protocol.js';
 import { extractFileRequest } from './files/extract.js';
 import { loadProvidersConfig, providersConfigPath } from './config/providers-config.js';
+import { getUpdateStatus, applyUpdate, RESTART_EXIT_CODE } from './update.js';
 
 const PORT = parseInt(process.env.PORT || '3333', 10);
 
@@ -151,6 +152,30 @@ app.post('/api/feedback', async (req, res) => {
     // Don't fail the tester's flow — they can still copy/paste the report.
     console.warn(`  [feedback] could not save: ${err instanceof Error ? err.message : String(err)}`);
     res.json({ ok: false, error: 'Could not save server-side; copy the report instead.' });
+  }
+});
+
+// Is a newer commit available on the tracked branch? Reports supported:false
+// when Kairos isn't running from a git clone (e.g. the packaged bundle), so the
+// UI can hide the update affordance.
+app.get('/api/update/status', async (_req, res) => {
+  res.json(await getUpdateStatus());
+});
+
+// Apply a git-based self-update: fast-forward the clone, then ask the
+// supervisor launcher to rebuild + restart by exiting with RESTART_EXIT_CODE.
+// We respond to the client BEFORE exiting so it knows to start polling for the
+// server to come back; the exit is deferred a beat so the response flushes.
+app.post('/api/update/apply', async (_req, res) => {
+  const result = await applyUpdate();
+  res.json(result);
+  if (result.ok && result.updated) {
+    console.log(`  [update] ${result.message}`);
+    // Give the HTTP response time to flush before the process exits.
+    setTimeout(() => {
+      server.close();
+      process.exit(RESTART_EXIT_CODE);
+    }, 250);
   }
 });
 
