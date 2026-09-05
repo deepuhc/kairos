@@ -6,9 +6,18 @@ Kairos orchestrates multiple AI agents across any LLM (local or cloud) for any d
 
 ## Quick Start
 
-Kairos runs anywhere Node runs — **macOS, Ubuntu/Linux, and Windows**. The steps
-below are the full install from a clean machine; they're written so you can hand
-them to Claude Code (or run them yourself) and get to `http://localhost:3333`.
+Kairos runs anywhere Node runs — **macOS, Ubuntu/Linux, and Windows**.
+
+**Easiest — double-click installer with one-click updates:** download the
+[`install/`](install/) folder and run the file for your OS
+(`Install Kairos (macOS).command`, `Install Kairos (Windows).bat`, or
+`bash install/install.sh` on Linux). It installs Kairos to `~/Kairos`, makes a
+double-clickable launcher, and enables the in-app **Update Kairos** button so
+new versions apply and restart with one click. Prerequisites: **Git** and
+**Node.js 20+**. Full guide: [docs/install-and-update.md](docs/install-and-update.md).
+
+Or install manually — the steps below work from a clean machine on any OS and
+can be handed to Claude Code (or run yourself) to get to `http://localhost:3333`.
 
 ### 1. Prerequisites
 
