@@ -15,8 +15,8 @@
 //   KAIROS_HOME   install location (default: ~/Kairos)
 //   KAIROS_BRANCH branch to track (default: main)
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from 'node:fs';
-import { homedir, platform } from 'node:os';
+import { existsSync, mkdirSync, writeFileSync, chmodSync, readFileSync, mkdtempSync, renameSync } from 'node:fs';
+import { homedir, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const REPO = process.env.KAIROS_REPO || 'https://github.com/deepuhc/kairos.git';
@@ -45,26 +45,135 @@ function preflight() {
 }
 
 // --- Clone or update ----------------------------------------------------------
+// The source can be a normal git URL (KAIROS_REPO) or a local git bundle file
+// (KAIROS_BUNDLE) — the offline path. A bundle is a single file holding the
+// whole history, so cloning from it yields a real git repo that can later be
+// re-pointed at GitHub for in-app self-update.
 function cloneOrUpdate() {
+  const bundle = process.env.KAIROS_BUNDLE;
+  const source = bundle || REPO;
+
   if (existsSync(join(HOME, '.git'))) {
     log(`Updating existing install at ${HOME}…`);
-    sh('git', ['-C', HOME, 'fetch', '--quiet'], {});
+    sh('git', ['-C', HOME, 'fetch', '--quiet', source, BRANCH], {});
     sh('git', ['-C', HOME, 'checkout', BRANCH], {});
-    sh('git', ['-C', HOME, 'merge', '--ff-only', `origin/${BRANCH}`], {});
+    sh('git', ['-C', HOME, 'merge', '--ff-only', 'FETCH_HEAD'], {});
   } else {
-    log(`Cloning Kairos into ${HOME}…`);
+    log(`Cloning Kairos into ${HOME}${bundle ? ' (from offline bundle)' : ''}…`);
     mkdirSync(HOME, { recursive: true });
-    sh('git', ['clone', '--branch', BRANCH, REPO, HOME], {});
+    sh('git', ['clone', '--branch', BRANCH, source, HOME], {});
+    // A bundle clone sets origin to the bundle file. Re-point origin at the
+    // real remote so the in-app Update button can fetch future versions from
+    // GitHub once the machine has access. (No network is touched here.)
+    if (bundle) {
+      try {
+        sh('git', ['-C', HOME, 'remote', 'set-url', 'origin', REPO], {});
+        sh('git', ['-C', HOME, 'branch', `--set-upstream-to=origin/${BRANCH}`, BRANCH], { stdio: 'ignore' });
+      } catch { /* upstream wiring is best-effort; offline install still works */ }
+    }
   }
 }
 
 // --- Install + build ----------------------------------------------------------
+const npm = isWin ? 'npm.cmd' : 'npm';
+
 function installAndBuild() {
-  const npm = isWin ? 'npm.cmd' : 'npm';
   log('Installing dependencies (this can take a few minutes)…');
   sh(npm, ['install', '--no-audit', '--no-fund'], { cwd: HOME });
+  buildWithRepair();
+}
+
+// npm has a long-standing bug (#4828) where a fresh `npm install` can skip the
+// platform-specific native binaries for esbuild/rollup, leaving the build to
+// fail with "Cannot find module @rollup/rollup-<platform>" or an esbuild
+// "Host version does not match binary version" error. When that happens we
+// fetch the exact-version native packages that the installed esbuild/rollup
+// need and place them directly, then rebuild. This is what makes a clean
+// install actually succeed on a new machine.
+function buildWithRepair() {
   log('Building…');
+  try {
+    sh(npm, ['run', 'build'], { cwd: HOME });
+    return;
+  } catch {
+    log('Build failed — repairing native binaries (npm optional-deps bug) and retrying…');
+  }
+  repairNativeBinaries();
   sh(npm, ['run', 'build'], { cwd: HOME });
+}
+
+// Find every installed esbuild/rollup and ensure its matching platform native
+// package sits next to it, fetched straight from the npm registry tarball so
+// npm's own pruning can't remove it.
+function repairNativeBinaries() {
+  // esbuild uses @esbuild/<os>-<arch>; rollup uses @rollup/rollup-<os>-<arch>.
+  const arch = process.arch; // 'arm64' | 'x64'
+  const osKey = OS === 'win32' ? 'win32' : OS === 'darwin' ? 'darwin' : 'linux';
+  const esTriple = `${osKey}-${arch}`;
+  const rollupTriple = OS === 'linux' ? `linux-${arch}-gnu` : `${osKey}-${arch}`;
+
+  for (const inst of findPackageInstances('esbuild')) {
+    const ver = readVersion(inst);
+    if (ver) placeNative(`@esbuild/${esTriple}`, ver, join(dirnameOf(inst), '@esbuild', esTriple));
+  }
+  for (const inst of findPackageInstances('rollup')) {
+    const ver = readVersion(inst);
+    if (ver) placeNative(`@rollup/rollup-${rollupTriple}`, ver, join(dirnameOf(inst), '@rollup', `rollup-${rollupTriple}`));
+  }
+}
+
+function findPackageInstances(pkg) {
+  // Locate every node_modules/.../<pkg> directory under the install root.
+  try {
+    const pattern = isWin ? `\\node_modules\\${pkg}\\package.json` : `/node_modules/${pkg}/package.json`;
+    const finder = isWin
+      ? ['-Command', `Get-ChildItem -Path '${HOME}' -Recurse -Filter package.json -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*${pattern}' } | ForEach-Object { $_.DirectoryName }`]
+      : null;
+    if (isWin) {
+      const out = shOut('powershell', ['-NoProfile', ...finder]);
+      return out ? out.split(/\r?\n/).filter(Boolean) : [];
+    }
+    const out = shOut('find', [HOME, '-type', 'f', '-path', `*/node_modules/${pkg}/package.json`]);
+    return out ? out.split('\n').filter(Boolean).map((p) => p.replace(/\/package\.json$/, '')) : [];
+  } catch {
+    return [];
+  }
+}
+
+function dirnameOf(pkgDir) {
+  // pkgDir is .../node_modules/<pkg>; its native sibling lives in the same
+  // node_modules, i.e. .../node_modules.
+  return join(pkgDir, '..');
+}
+
+function readVersion(pkgDir) {
+  try {
+    return JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf-8')).version;
+  } catch {
+    return null;
+  }
+}
+
+function placeNative(pkg, version, dest) {
+  if (existsSync(join(dest, 'package.json'))) return; // already present
+  try {
+    const url = shOut(npm, ['view', `${pkg}@${version}`, 'dist.tarball']);
+    if (!url) return;
+    const tmp = mkdtempSync(join(tmpdir(), 'kairos-native-'));
+    const tgz = join(tmp, 'p.tgz');
+    if (isWin) {
+      sh('powershell', ['-NoProfile', '-Command', `Invoke-WebRequest -UseBasicParsing '${url}' -OutFile '${tgz}'`]);
+    } else {
+      sh('curl', ['-fsSL', url, '-o', tgz]);
+    }
+    sh('tar', ['-xzf', tgz, '-C', tmp]);
+    mkdirSync(join(dest, '..'), { recursive: true });
+    // The tarball extracts to a "package" dir; move it into place.
+    renameSync(join(tmp, 'package'), dest);
+    log(`  restored ${pkg}@${version}`);
+  } catch (err) {
+    log(`  could not restore ${pkg}@${version}: ${err.message}`);
+  }
 }
 
 // --- Create a double-clickable launcher --------------------------------------
