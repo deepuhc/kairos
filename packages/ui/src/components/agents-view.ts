@@ -37,7 +37,7 @@ import { moveId, reorderByIds, type DropPosition } from '../services/session-ord
 import { workspacePathFromHref } from '../services/workspace-links.js';
 import { fetchWithAuth } from '../services/backend-auth.js';
 import { renderItem, renderMarkdown, renderBlock, renderUsage, timelineStyles } from './agents-timeline-render.js';
-import { speak, stopSpeaking, speechOutputSupported } from '../services/speech.js';
+import { speak, stopSpeaking, speechOutputSupported, initDictationBase, applyDictationResult } from '../services/speech.js';
 import { evictMarkdownCache, renderMarkdownCached, type MarkdownLocalLinkDetail } from './markdown.js';
 import { collectMatches, totalMatches, locateMatch, type ItemMatch } from '../services/timeline-search.js';
 import { applyHighlights, clearHighlights } from './timeline-highlight.js';
@@ -4449,7 +4449,7 @@ export class DevaiAgents extends LitElement {
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = navigator.language || 'en-US';
-    this.dictationBase = s.draft.length && !s.draft.endsWith(' ') ? `${s.draft} ` : s.draft;
+    this.dictationBase = initDictationBase(s.draft);
     rec.onresult = (e: any) => {
       const active = this.current;
       if (!active) return;
@@ -4460,16 +4460,9 @@ export class DevaiAgents extends LitElement {
         if (r.isFinal) finalText += r[0].transcript;
         else interimText += r[0].transcript;
       }
-      const cleanFinal = finalText.replace(/\s+/g, ' ').trim();
-      const cleanInterim = interimText.replace(/\s+/g, ' ').trim();
-      if (cleanFinal) {
-        const baseTrimmed = this.dictationBase.replace(/ +$/, '');
-        this.dictationBase = baseTrimmed ? `${baseTrimmed} ${cleanFinal} ` : `${cleanFinal} `;
-      }
-      const baseTrimmed = this.dictationBase.replace(/ +$/, '');
-      active.draft = cleanInterim
-        ? (baseTrimmed ? `${baseTrimmed} ${cleanInterim}` : cleanInterim)
-        : this.dictationBase;
+      const merged = applyDictationResult(this.dictationBase, finalText, interimText);
+      this.dictationBase = merged.base;
+      active.draft = merged.draft;
       this.touch();
       this.scheduleComposerResize(false);
     };

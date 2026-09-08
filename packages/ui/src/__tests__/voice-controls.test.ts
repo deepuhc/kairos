@@ -23,6 +23,11 @@ describe('voice input (dictation) is wired into the composer', () => {
   it('stops dictation on disconnect and when navigating away', () => {
     expect(composer).toContain('if (this.listening) this.stopDictation();');
   });
+
+  it('merges recognizer results via the shared, tested helpers', () => {
+    expect(composer).toContain('this.dictationBase = initDictationBase(s.draft);');
+    expect(composer).toContain('applyDictationResult(this.dictationBase, finalText, interimText)');
+  });
 });
 
 describe('voice output (read aloud) is wired into the timeline', () => {

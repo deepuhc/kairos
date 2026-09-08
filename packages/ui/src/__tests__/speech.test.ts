@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { markdownToSpeech, speak, stopSpeaking, speechOutputSupported } from '../services/speech.js';
+import {
+  markdownToSpeech,
+  speak,
+  stopSpeaking,
+  speechOutputSupported,
+  initDictationBase,
+  applyDictationResult,
+} from '../services/speech.js';
 
 describe('markdownToSpeech', () => {
   it('drops fenced code blocks, keeping surrounding prose', () => {
@@ -42,6 +49,57 @@ describe('markdownToSpeech', () => {
   it('collapses whitespace and returns empty for blank input', () => {
     expect(markdownToSpeech('   ')).toBe('');
     expect(markdownToSpeech('a\n\n\n\nb')).toBe('a\nb');
+  });
+});
+
+describe('dictation transcript merging', () => {
+  it('starts from an empty draft with an empty base', () => {
+    expect(initDictationBase('')).toBe('');
+  });
+
+  it('preserves an existing draft and guarantees a single trailing space', () => {
+    expect(initDictationBase('hello')).toBe('hello ');
+    expect(initDictationBase('hello ')).toBe('hello '); // already spaced, unchanged
+  });
+
+  it('shows interim words appended to the base without committing them', () => {
+    const r = applyDictationResult('', '', 'open the');
+    expect(r.base).toBe(''); // interim is not locked in
+    expect(r.draft).toBe('open the');
+  });
+
+  it('commits final text into the base with clean spacing', () => {
+    const r = applyDictationResult('', 'open the file', '');
+    expect(r.base).toBe('open the file ');
+    expect(r.draft).toBe('open the file ');
+  });
+
+  it('appends a final fragment after already-committed text', () => {
+    const r = applyDictationResult('open the file ', 'and run it', '');
+    expect(r.base).toBe('open the file and run it ');
+    expect(r.draft).toBe('open the file and run it ');
+  });
+
+  it('shows interim words after committed text, then locks them in', () => {
+    const interim = applyDictationResult('open the file ', '', 'and run');
+    expect(interim.base).toBe('open the file '); // not committed yet
+    expect(interim.draft).toBe('open the file and run');
+
+    const finalized = applyDictationResult(interim.base, 'and run it', '');
+    expect(finalized.base).toBe('open the file and run it ');
+    expect(finalized.draft).toBe('open the file and run it ');
+  });
+
+  it('collapses internal whitespace runs in recognizer output', () => {
+    const r = applyDictationResult('', 'open   the\n\nfile', '');
+    expect(r.base).toBe('open the file ');
+  });
+
+  it('does not append to a draft that started mid-word without a space', () => {
+    // initDictationBase enforces the trailing space so words never fuse.
+    const base = initDictationBase('note:');
+    const r = applyDictationResult(base, 'call the API', '');
+    expect(r.draft).toBe('note: call the API ');
   });
 });
 

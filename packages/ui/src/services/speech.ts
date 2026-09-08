@@ -60,6 +60,40 @@ export function markdownToSpeech(markdown: string): string {
   return t.trim();
 }
 
+// --- Voice input (dictation) transcript merging --------------------------------
+// The Web Speech API streams results as a mix of *interim* (may still change) and
+// *final* (locked-in) fragments. We keep a `base` — the committed text so far,
+// kept with a single trailing space so the next word appends cleanly — and derive
+// the live draft by tacking interim words onto it. Extracted as pure functions so
+// the fiddly spacing rules are unit-tested independently of the DOM/recognizer.
+
+// The initial base when dictation starts from an existing draft: keep the draft
+// and ensure it ends in exactly one space so appended words don't collide.
+export function initDictationBase(draft: string): string {
+  return draft.length && !draft.endsWith(' ') ? `${draft} ` : draft;
+}
+
+// Given the current base and the raw final/interim transcripts from one result
+// event, return the new base (final text folded in) and the draft to display.
+export function applyDictationResult(
+  base: string,
+  finalText: string,
+  interimText: string,
+): { base: string; draft: string } {
+  const cleanFinal = finalText.replace(/\s+/g, ' ').trim();
+  const cleanInterim = interimText.replace(/\s+/g, ' ').trim();
+  let nextBase = base;
+  if (cleanFinal) {
+    const baseTrimmed = nextBase.replace(/ +$/, '');
+    nextBase = baseTrimmed ? `${baseTrimmed} ${cleanFinal} ` : `${cleanFinal} `;
+  }
+  const baseTrimmed = nextBase.replace(/ +$/, '');
+  const draft = cleanInterim
+    ? (baseTrimmed ? `${baseTrimmed} ${cleanInterim}` : cleanInterim)
+    : nextBase;
+  return { base: nextBase, draft };
+}
+
 // Speak the given text (converting Markdown to prose first). Cancels anything
 // already speaking so a new request doesn't queue behind the old one. Safe to
 // call when unsupported — it's a no-op. `onEnd` fires when speech finishes or is
