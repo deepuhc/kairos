@@ -38,6 +38,11 @@ import type {
 
 export { renderMarkdown };
 
+// Speaker / stop glyphs for the read-aloud button (inline so the render path
+// stays free of an icon-component dependency).
+const SPEAK_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4.5 6H2v4h2.5L8 13z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5"/><path d="M13 3.5a6 6 0 0 1 0 9"/></svg>`;
+const SPEAK_STOP_ICON = html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/></svg>`;
+
 // What the renderer needs to know about a tool item's surrounding session,
 // supplied by the caller so the functions stay free of session-state coupling.
 export interface TimelineRenderCtx {
@@ -57,6 +62,11 @@ export interface TimelineRenderCtx {
   collapseReplayDiffsFor?: (toolCallId: string) => boolean;
   // Optional per-message action buttons rendered beside the copy affordance.
   messageActions?: (item: Extract<TimelineItem, { kind: 'message' }>) => TemplateResult | typeof nothing;
+  // Voice output (text-to-speech). When set, assistant messages get a speaker
+  // button that reads the reply aloud on-device. `speakingItemId` is the id of
+  // the message currently being spoken (so its button shows a "stop" state).
+  onSpeak?: (item: Extract<TimelineItem, { kind: 'message' }>) => void;
+  speakingItemId?: string | null;
   // True for an assistant message that is still streaming. The renderer can
   // trade sub-frame markdown freshness for lower CPU, then render exactly when
   // the caller reports the turn has settled.
@@ -140,10 +150,20 @@ export function renderItem(item: TimelineItem, ctx: TimelineRenderCtx) {
       title="Copy message"
     ></copy-button>`;
     const actions = role === 'user' ? ctx.messageActions?.(item) : nothing;
+    const speaking = ctx.speakingItemId === item.id;
+    const speakBtn = role === 'assistant' && ctx.onSpeak
+      ? html`<button
+            class="msg-speak ${speaking ? 'speaking' : ''}"
+            @click=${() => ctx.onSpeak?.(item)}
+            ${tooltip(speaking ? 'Stop reading' : 'Read aloud')}
+            aria-label=${speaking ? 'Stop reading' : 'Read aloud'}
+            aria-pressed=${speaking ? 'true' : 'false'}
+          >${speaking ? SPEAK_STOP_ICON : SPEAK_ICON}</button>`
+      : nothing;
     return html`
       <div class="msg ${role}" data-item-id=${item.id}>
         ${role === 'assistant'
-          ? html`<div class="eyebrow">${hasAgentLogo(ctx.agentId) ? html`<agent-logo .agent=${ctx.agentId} .size=${13}></agent-logo>` : nothing}${ctx.agentName}<span class="msg-time" ${tooltip(formatTimestamp(item.ts))}>${formatClock(item.ts)}</span>${copyBtn}</div>`
+          ? html`<div class="eyebrow">${hasAgentLogo(ctx.agentId) ? html`<agent-logo .agent=${ctx.agentId} .size=${13}></agent-logo>` : nothing}${ctx.agentName}<span class="msg-time" ${tooltip(formatTimestamp(item.ts))}>${formatClock(item.ts)}</span>${speakBtn}${copyBtn}</div>`
           : nothing}
         <div class="content" data-find-id=${item.id}>${role === 'assistant' ? renderMarkdownCached(`${ctx.cacheScope ?? ''}:${item.id}`, item.text, { live: ctx.liveMarkdownFor?.(item) ?? false }) : stripControlChars(item.text)}</div>
         ${role === 'user' ? html`<span class="msg-foot"><span class="msg-time" ${tooltip(formatTimestamp(item.ts))}>${formatClock(item.ts)}</span>${actions}${copyBtn}</span>` : nothing}
@@ -443,6 +463,28 @@ export const timelineStyles = css`
   }
   .eyebrow .msg-time { text-transform: none; }
   .msg.user .msg-time { padding: 0 2px; }
+  /* Read-aloud (TTS) button in the assistant eyebrow. Hidden until hover like
+     the copy button, but stays visible while actively speaking. */
+  .msg-speak {
+    opacity: 0;
+    transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--neutral-gray);
+    cursor: pointer;
+    padding: 0;
+  }
+  .msg:hover .msg-speak, .msg:focus-within .msg-speak, .msg-speak.speaking { opacity: 1; }
+  .msg-speak:hover:not(.speaking) { color: var(--bright-white); background: var(--accent-a10); }
+  .msg-speak.speaking { color: var(--accent); animation: speak-pulse 1.4s ease-in-out infinite; }
+  .msg-speak svg { display: block; }
+  @keyframes speak-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   .content {
     font-size: var(--font-size-md);
     line-height: 1.65;

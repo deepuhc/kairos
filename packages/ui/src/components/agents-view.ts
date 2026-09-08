@@ -37,6 +37,7 @@ import { moveId, reorderByIds, type DropPosition } from '../services/session-ord
 import { workspacePathFromHref } from '../services/workspace-links.js';
 import { fetchWithAuth } from '../services/backend-auth.js';
 import { renderItem, renderMarkdown, renderBlock, renderUsage, timelineStyles } from './agents-timeline-render.js';
+import { speak, stopSpeaking, speechOutputSupported } from '../services/speech.js';
 import { evictMarkdownCache, renderMarkdownCached, type MarkdownLocalLinkDetail } from './markdown.js';
 import { collectMatches, totalMatches, locateMatch, type ItemMatch } from '../services/timeline-search.js';
 import { applyHighlights, clearHighlights } from './timeline-highlight.js';
@@ -637,6 +638,10 @@ export class DevaiAgents extends LitElement {
   private speechSupported = typeof window !== 'undefined'
     && !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
   private recognition: any = null;
+  // Voice output (text-to-speech): whether the browser can speak, and the id of
+  // the assistant message currently being read aloud (drives its button state).
+  private speechOutputSupported = speechOutputSupported();
+  @state() private speakingItemId: string | null = null;
   // Snapshot of the draft when dictation starts, so we can append rather than
   // overwrite as interim results stream in.
   private dictationBase = '';
@@ -2172,6 +2177,7 @@ export class DevaiAgents extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this.listening) this.stopDictation();
+    if (this.speakingItemId) this.stopSpeaking();
     document.removeEventListener('click', this.closeConfigMenu);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
     document.removeEventListener('keydown', this.onGlobalKeydown);
@@ -2194,6 +2200,7 @@ export class DevaiAgents extends LitElement {
     // Navigated away from the Agents tab: stop dictation so the mic isn't left
     // live on a hidden view. Sessions and the socket stay up.
     if (changed.has('active') && !this.active && this.listening) this.stopDictation();
+    if (changed.has('active') && !this.active && this.speakingItemId) this.stopSpeaking();
     if (changed.has('activeId')) this.linkedFileRequest = null;
     if (changed.has('activeId') || changed.has('sessions')) this.refreshActiveSourceStatus();
     // Came back to (or focused a different session within) the Agents tab — the
@@ -4423,6 +4430,17 @@ export class DevaiAgents extends LitElement {
     this.startDictation();
   }
 
+  // Honest label about where dictation audio is processed. The Web Speech API is
+  // on-device in Safari (like iMessage dictation) but streams audio to Google's
+  // servers in Chrome/Edge — so we say so rather than implying it's always local.
+  private dictationTooltip(): string {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isChromium = /Chrome|Chromium|Edg\//.test(ua) && !/OPR\//.test(ua);
+    return isChromium
+      ? 'Dictate a message (Chrome sends audio to Google for transcription)'
+      : 'Dictate a message (on-device speech recognition)';
+  }
+
   private startDictation() {
     const s = this.current;
     if (!s || !this.speechSupported) return;
@@ -4475,6 +4493,26 @@ export class DevaiAgents extends LitElement {
       try { this.recognition.stop(); } catch { /* already stopped */ }
     }
     this.listening = false;
+  }
+
+  // Voice output: read an assistant message aloud with the browser's on-device
+  // speech synthesis. Clicking the speaking message stops it; clicking a
+  // different one switches to it. `speak()` cancels any prior utterance itself.
+  private toggleSpeak(item: Extract<AgentSession['items'][number], { kind: 'message' }>) {
+    if (this.speakingItemId === item.id) { this.stopSpeaking(); return; }
+    this.speakingItemId = item.id;
+    speak(item.text, {
+      onEnd: () => {
+        // Only clear if this message is still the active one — a rapid switch to
+        // another message must not blank the newer one's state.
+        if (this.speakingItemId === item.id) { this.speakingItemId = null; }
+      },
+    });
+  }
+
+  private stopSpeaking() {
+    stopSpeaking();
+    this.speakingItemId = null;
   }
 
   private handleKeydown(e: KeyboardEvent) {
@@ -6175,6 +6213,8 @@ export class DevaiAgents extends LitElement {
       collapseReplayDiffsFor: (id) => s.replayedToolIds.has(id),
       messageActions: (msg) => this.renderPromptHoverActions(s, msg),
       liveMarkdownFor: (msg) => s.phase === 'thinking' && s.items[s.items.length - 1]?.id === msg.id,
+      onSpeak: this.speechOutputSupported ? (msg) => this.toggleSpeak(msg) : undefined,
+      speakingItemId: this.speakingItemId,
     });
   }
 
@@ -6412,6 +6452,22 @@ export class DevaiAgents extends LitElement {
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M10 2.5 6 13.5"/>
+                </svg>
+              </button>
+            ` : nothing}
+            ${this.speechSupported ? html`
+              <button
+                class="icon-btn mic ${this.listening ? 'listening' : ''}"
+                ?disabled=${disabled}
+                @click=${() => this.toggleDictation()}
+                ${tooltip(this.listening ? 'Stop dictation' : this.dictationTooltip())}
+                aria-label=${this.listening ? 'Stop dictation' : 'Dictate a message'}
+                aria-pressed=${this.listening ? 'true' : 'false'}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="6" y="1.5" width="4" height="8" rx="2"/>
+                  <path d="M3.5 7a4.5 4.5 0 0 0 9 0"/>
+                  <path d="M8 11.5V14M6 14h4"/>
                 </svg>
               </button>
             ` : nothing}
