@@ -8,6 +8,36 @@ reinstall, same on every platform.
 Prerequisites on the target machine: **Git** and **Node.js 20+**. The installer
 checks for both and tells you what's missing.
 
+## Download a prebuilt installer (no clone, no build)
+
+The fastest way onto a new machine: grab a prebuilt native installer from the
+releases page and double-click it — no `git clone`, no `npm`, no build step.
+
+**[⬇ Download the latest release](https://github.com/deepuhc/kairos/releases/latest)**,
+then pick the file for your OS:
+
+| OS | File | First launch |
+|----|------|--------------|
+| **macOS** | `.dmg` (Apple Silicon or Intel) | Unsigned — right-click the app → **Open** the first time, then confirm. |
+| **Windows** | `.msi` or `.exe` | If SmartScreen warns, click **More info → Run anyway**. |
+| **Linux** | `.deb` (`sudo apt install ./Kairos_*.deb`) or the portable `.AppImage` (`chmod +x` then run) | — |
+
+These bundles are built and published automatically by GitHub Actions
+(`.github/workflows/release.yml`) on every version tag, one per platform.
+
+**Honest trade-offs vs. the other install paths:**
+
+- **Not code-signed / notarized.** You get a one-time OS security prompt per
+  platform (the right-click→Open / Run-anyway above). Removing it needs a paid
+  Apple Developer certificate and a Windows code-signing certificate; the
+  pipeline is pre-wired to enable signing later with only repo secrets.
+- **Node.js 20+ must be installed** on the target machine — the app runs a local
+  Node server for its backend (a Node runtime is not embedded). If Node is
+  missing, the app shows a startup-error page instead of crashing.
+- **No in-app self-update.** These are native installers; to update, download the
+  next release. If you want the one-click **Update Kairos** button, use the
+  double-click installer below instead.
+
 ## Install (double-click)
 
 Download the `install/` folder from the repo, then:

@@ -8,7 +8,23 @@ Kairos orchestrates multiple AI agents across any LLM (local or cloud) for any d
 
 Kairos runs anywhere Node runs — **macOS, Ubuntu/Linux, and Windows**.
 
-**Easiest — double-click installer with one-click updates:** download the
+**Simplest — download a prebuilt installer:**
+**[⬇ Download the latest release](https://github.com/deepuhc/kairos/releases/latest)**,
+pick the file for your OS, and double-click it:
+
+| OS | File | First launch |
+|----|------|--------------|
+| **macOS** | `.dmg` | Unsigned — right-click the app → **Open** the first time. |
+| **Windows** | `.msi` / `.exe` | If SmartScreen warns, click **More info → Run anyway**. |
+| **Linux** | `.deb` (`sudo apt install ./Kairos_*.deb`) or portable `.AppImage` | — |
+
+These are built and published by CI on every release. They're **not
+code-signed**, so you get a one-time OS security prompt (the right-click→Open /
+Run-anyway above). The app runs a local Node server for its backend, so the
+target machine still needs **Node.js 20+** installed. Full guide:
+[docs/install-and-update.md](docs/install-and-update.md).
+
+**Also easy — double-click installer with one-click updates:** download the
 [`install/`](install/) folder and run the file for your OS
 (`Install Kairos (macOS).command`, `Install Kairos (Windows).bat`, or
 `bash install/install.sh` on Linux). It installs Kairos to `~/Kairos`, makes a
