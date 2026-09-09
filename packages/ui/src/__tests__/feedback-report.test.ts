@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { formatFeedbackReport, collectFeedbackContext, type FeedbackContext } from '../services/feedback-report.js';
+import { formatFeedbackReport, collectFeedbackContext, githubIssueUrl, KAIROS_REPO_URL, type FeedbackContext } from '../services/feedback-report.js';
 import { recordError, recentErrors, clearErrors } from '../services/feedback-log.js';
 
 const baseCtx: FeedbackContext = {
@@ -61,6 +61,45 @@ describe('formatFeedbackReport', () => {
     const out = formatFeedbackReport('x', withErr);
     expect(out).toContain('error: Boom');
     expect(out).toContain('at foo.js:1');
+  });
+});
+
+describe('githubIssueUrl', () => {
+  it('points at the real Kairos repo issues/new endpoint', () => {
+    const url = githubIssueUrl('Boom', 'REPORT');
+    expect(KAIROS_REPO_URL).toBe('https://github.com/deepuhc/kairos');
+    expect(url.startsWith(`${KAIROS_REPO_URL}/issues/new?`)).toBe(true);
+  });
+
+  it('uses the first non-empty line of the note as the issue title', () => {
+    const url = githubIssueUrl('\n  Image upload spins forever  \nmore detail', 'REPORT');
+    expect(url).toContain(`title=${encodeURIComponent('Image upload spins forever')}`);
+  });
+
+  it('falls back to a default title when the note is blank', () => {
+    expect(githubIssueUrl('   ', 'REPORT')).toContain(`title=${encodeURIComponent('Bug report')}`);
+  });
+
+  it('truncates an overlong title', () => {
+    const long = 'x'.repeat(200);
+    const url = githubIssueUrl(long, 'R');
+    expect(url).toContain(encodeURIComponent('…'));
+    expect(url).not.toContain(encodeURIComponent(long));
+  });
+
+  it('embeds the report in a fenced code block in the body', () => {
+    const url = githubIssueUrl('note', 'LINE1\nLINE2');
+    const body = decodeURIComponent(new URL(url).searchParams.get('body') ?? '');
+    expect(body).toContain('```\nLINE1\nLINE2\n```');
+  });
+
+  it('drops the report from the body (with a note) when the URL would be too large', () => {
+    const huge = 'A'.repeat(20000);
+    const url = githubIssueUrl('note', huge);
+    expect(url.length).toBeLessThan(8000);
+    const body = decodeURIComponent(new URL(url).searchParams.get('body') ?? '');
+    expect(body).not.toContain(huge);
+    expect(body).toContain('paste the copied report');
   });
 });
 

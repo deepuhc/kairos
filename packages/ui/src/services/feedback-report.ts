@@ -122,3 +122,42 @@ export function formatFeedbackReport(message: string, ctx: FeedbackContext): str
 function nowSafe(): number {
   return typeof Date.now === 'function' ? Date.now() : 0;
 }
+
+/** Canonical public repository. Bug reports and the help drawer link here. */
+export const KAIROS_REPO_URL = 'https://github.com/deepuhc/kairos';
+
+// GitHub caps a prefilled issue URL around 8 KB; past that it drops the body and
+// the "New issue" form opens blank. Keep the encoded URL comfortably under that.
+const MAX_ISSUE_URL = 7000;
+
+/** First non-empty line of the tester's note, trimmed to a sane title length. */
+function issueTitle(message: string): string {
+  const firstLine = message.split('\n').map((l) => l.trim()).find(Boolean);
+  if (!firstLine) return 'Bug report';
+  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine;
+}
+
+/**
+ * Build a "New issue" URL on the Kairos repo, prefilled with a title from the
+ * tester's note and a body that embeds the full report in a fenced code block.
+ * If the encoded URL would exceed GitHub's limit, the report is dropped from the
+ * body (with a note to paste it) so the form still opens rather than breaking.
+ */
+export function githubIssueUrl(message: string, report: string): string {
+  const title = issueTitle(message);
+  const full =
+    'Thanks for reporting! Please add any extra steps to reproduce.\n\n' +
+    '<!-- Auto-collected diagnostics from Kairos — no secrets included. -->\n\n' +
+    '```\n' +
+    report +
+    '\n```\n';
+  const build = (body: string): string =>
+    `${KAIROS_REPO_URL}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+
+  const withReport = build(full);
+  if (withReport.length <= MAX_ISSUE_URL) return withReport;
+  return build(
+    'Thanks for reporting! Please add any extra steps to reproduce.\n\n' +
+      '_(The diagnostics report was too large to prefill — paste the copied report here.)_\n',
+  );
+}

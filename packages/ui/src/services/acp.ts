@@ -433,7 +433,16 @@ export class AcpClient {
       // generic "websocket closed" the pending initialize request would carry.
       // `cleanCloseReason` passes non-agent-exit reasons through verbatim, so a
       // bare `agent-exit code=N` with no stderr becomes '' → friendly fallback.
-      this.handlers.onError?.(detail || 'Agent connection closed', undefined, agent);
+      // With no stderr detail, the usual cause is that no LLM provider is
+      // reachable (no Ollama running, no API key), so the agent process exits
+      // immediately. Point the user at that rather than a dead-end generic line.
+      this.handlers.onError?.(
+        detail ||
+          'Agent connection closed before it started. No LLM provider looks reachable — ' +
+            'start Ollama (ollama serve) or set an API key, then check Settings → provider diagnostics.',
+        undefined,
+        agent,
+      );
       return;
     }
 

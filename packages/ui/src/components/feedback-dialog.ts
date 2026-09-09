@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { fetchWithAuth } from '../services/backend-auth.js';
-import { collectFeedbackContext, formatFeedbackReport } from '../services/feedback-report.js';
+import { collectFeedbackContext, formatFeedbackReport, githubIssueUrl } from '../services/feedback-report.js';
 
 // A dialog that turns a tester's note into one paste-ready report — their words
 // plus version, mode, provider diagnostics, and recent errors. The primary
@@ -153,6 +153,21 @@ export class KairosFeedbackDialog extends LitElement {
     }
   }
 
+  // Open a prefilled GitHub issue on the Kairos repo. We copy the report to the
+  // clipboard first so that if it was too large to fit in the URL (GitHub's
+  // limit), the tester can paste it into the issue body themselves.
+  private async openGithub() {
+    try {
+      await navigator.clipboard.writeText(this.report);
+      this.copied = true;
+      void this.save();
+    } catch {
+      /* clipboard blocked — the issue still opens, report is in the preview */
+    }
+    const url = githubIssueUrl(this.message, this.report);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   private async save() {
     try {
       const res = await fetchWithAuth('/api/feedback', {
@@ -186,7 +201,8 @@ export class KairosFeedbackDialog extends LitElement {
               placeholder="Describe the bug or idea. Steps to reproduce help a lot."></textarea>
             <p class="hint">
               This builds one report with your note plus version, provider status, and
-              recent errors — no secrets. Copy it and paste it back to the developer.
+              recent errors — no secrets. <strong>Report on GitHub</strong> opens a
+              prefilled issue; or copy it and paste it back to the developer.
             </p>
             ${this.report ? html`<pre class="preview">${this.report}</pre>` : nothing}
           </div>
@@ -194,8 +210,11 @@ export class KairosFeedbackDialog extends LitElement {
             ${this.copied ? html`<span class="status">Copied${this.savedNote ? ` — ${this.savedNote}` : ''}</span>` : nothing}
             <span class="spacer"></span>
             <button class="action" @click=${this.close}>Cancel</button>
-            <button class="action primary" @click=${this.copy} ?disabled=${this.building || !this.report}>
+            <button class="action" @click=${this.copy} ?disabled=${this.building || !this.report}>
               ${this.building ? 'Preparing…' : this.copied ? 'Copied ✓' : 'Copy report'}
+            </button>
+            <button class="action primary" @click=${this.openGithub} ?disabled=${this.building || !this.report}>
+              Report on GitHub
             </button>
           </div>
         </div>

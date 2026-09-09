@@ -28,8 +28,9 @@ import {
   helpArt,
 } from './help-illustrations.js';
 
-const FEEDBACK_URL =
-  'https://github.com/user/kairos/issues';
+import { KAIROS_REPO_URL } from '../services/feedback-report.js';
+
+const FEEDBACK_URL = `${KAIROS_REPO_URL}/issues`;
 
 interface TabCard {
   art: TemplateResult;
