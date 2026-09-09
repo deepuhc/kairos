@@ -14,7 +14,7 @@ pick the file for your OS, and double-click it:
 
 | OS | File | First launch |
 |----|------|--------------|
-| **macOS** | `.dmg` | Unsigned — right-click the app → **Open** the first time. |
+| **macOS** | `.dmg` (universal — any Mac, Intel or Apple Silicon) | Unsigned — right-click the app → **Open** the first time. |
 | **Windows** | `.msi` / `.exe` | If SmartScreen warns, click **More info → Run anyway**. |
 | **Linux** | `.deb` (`sudo apt install ./Kairos_*.deb`) or portable `.AppImage` | — |
 
