@@ -59,6 +59,21 @@ fn resolve_resources(app: &tauri::App) -> (PathBuf, PathBuf) {
     )
 }
 
+/// Resolve the Node binary to run the server with. Prefer the runtime we bundle
+/// inside the app (`resources/runtime/node[.exe]`) so users install nothing and
+/// a Finder-launched app — which gets a stripped PATH that misses Homebrew/nvm
+/// Node — still works. Falls back to a bare `node` on PATH (dev / source runs,
+/// or if the embedded binary is somehow absent).
+fn resolve_node(app: &tauri::App) -> PathBuf {
+    let name = if cfg!(windows) { "runtime/node.exe" } else { "runtime/node" };
+    if let Ok(node) = app.path().resolve(name, BaseDirectory::Resource) {
+        if node.exists() {
+            return node;
+        }
+    }
+    PathBuf::from(if cfg!(windows) { "node.exe" } else { "node" })
+}
+
 fn main() {
     let child_handle: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
     let child_for_cleanup = Arc::clone(&child_handle);
@@ -75,9 +90,10 @@ fn main() {
             }
 
             let (server_js, ui_dist) = resolve_resources(app);
+            let node = resolve_node(app);
             let port = pick_free_port();
 
-            let spawn_result = Command::new("node")
+            let spawn_result = Command::new(&node)
                 .arg(&server_js)
                 .env("PORT", port.to_string())
                 .env("KAIROS_UI_DIST", &ui_dist)
@@ -95,9 +111,11 @@ fn main() {
                     }
                 }
                 Err(err) => Some(format!(
-                    "Could not start the Kairos server.\n\nKairos launches a Node.js process to run its \
-                     backend, so Node 20+ must be installed and on your PATH.\n\nUnderlying error: {err}\n\n\
-                     Server path: {}",
+                    "Could not start the Kairos server.\n\nKairos ships its own Node.js runtime and launches \
+                     it to run the backend; this launch failed. If the bundled runtime is missing, Kairos \
+                     falls back to a `node` on your PATH (install Node 20+ from https://nodejs.org).\n\n\
+                     Underlying error: {err}\n\nNode: {}\nServer path: {}",
+                    node.display(),
                     server_js.display()
                 )),
             };

@@ -37,7 +37,8 @@
     ],
     "resources": {
       "resources/server": "server",
-      "resources/ui": "ui"
+      "resources/ui": "ui",
+      "resources/runtime": "runtime"
     }
   },
   "plugins": {
