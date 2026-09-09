@@ -35,14 +35,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: macOS (Apple Silicon)
+          # One universal macOS .dmg that runs on BOTH Apple Silicon and Intel,
+          # so users never have to pick the right architecture (and we don't wait
+          # on the scarce Intel `macos-13` runners). Built on the Apple Silicon
+          # runner with both Rust targets installed for the fat binary.
+          - label: macOS (Universal)
             os: macos-14
-            rust_target: aarch64-apple-darwin
-            args: '--target aarch64-apple-darwin'
-          - label: macOS (Intel)
-            os: macos-13
-            rust_target: x86_64-apple-darwin
-            args: '--target x86_64-apple-darwin'
+            rust_target: aarch64-apple-darwin,x86_64-apple-darwin
+            args: '--target universal-apple-darwin'
           - label: Windows (x64)
             os: windows-latest
             rust_target: x86_64-pc-windows-msvc
@@ -119,7 +119,7 @@ jobs:
           releaseBody: |
             Download the installer for your OS below, then double-click it.
 
-            - **macOS**: `.dmg` — first launch is unsigned, so right-click the app → **Open**.
+            - **macOS**: `.dmg` (universal — runs on both Apple Silicon and Intel). First launch is unsigned, so right-click the app → **Open**.
             - **Windows**: `.msi` or `.exe` — if SmartScreen warns, click **More info → Run anyway**.
             - **Linux**: `.deb` (`sudo apt install ./Kairos_*.deb`) or the portable `.AppImage`.
 
