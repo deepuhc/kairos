@@ -18,10 +18,10 @@ pick the file for your OS, and double-click it:
 | **Windows** | `.msi` / `.exe` | If SmartScreen warns, click **More info → Run anyway**. |
 | **Linux** | `.deb` (`sudo apt install ./Kairos_*.deb`) or portable `.AppImage` | — |
 
-These are built and published by CI on every release. They're **not
-code-signed**, so you get a one-time OS security prompt (the right-click→Open /
-Run-anyway above). The app runs a local Node server for its backend, so the
-target machine still needs **Node.js 20+** installed. Full guide:
+These are built and published by CI on every release. They **bundle their own
+Node.js runtime**, so there are no prerequisites — just download and open.
+They're **not code-signed**, so you get a one-time OS security prompt (the
+right-click→Open / Run-anyway above). Full guide:
 [docs/install-and-update.md](docs/install-and-update.md).
 
 **Also easy — double-click installer with one-click updates:** download the

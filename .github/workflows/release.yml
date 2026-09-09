@@ -123,7 +123,7 @@ jobs:
             - **Windows**: `.msi` or `.exe` — if SmartScreen warns, click **More info → Run anyway**.
             - **Linux**: `.deb` (`sudo apt install ./Kairos_*.deb`) or the portable `.AppImage`.
 
-            Requires **Node.js 20+** on the target machine — Kairos runs a local Node server for its backend.
+            No prerequisites — these installers **bundle their own Node.js runtime**, so nothing else needs to be installed.
           # First runs stay a DRAFT so we can inspect the artifacts before they go
           # public. Flip to false once all platforms build green.
           releaseDraft: true

@@ -31,9 +31,10 @@ These bundles are built and published automatically by GitHub Actions
   platform (the right-click→Open / Run-anyway above). Removing it needs a paid
   Apple Developer certificate and a Windows code-signing certificate; the
   pipeline is pre-wired to enable signing later with only repo secrets.
-- **Node.js 20+ must be installed** on the target machine — the app runs a local
-  Node server for its backend (a Node runtime is not embedded). If Node is
-  missing, the app shows a startup-error page instead of crashing.
+- **No prerequisites — Node.js is bundled.** These installers embed their own
+  Node.js runtime (a universal arm64+x86_64 build on macOS), so nothing needs to
+  be installed first. If that bundled runtime is ever missing, the app falls back
+  to a `node` on your PATH and shows a startup-error page if it can't find one.
 - **No in-app self-update.** These are native installers; to update, download the
   next release. If you want the one-click **Update Kairos** button, use the
   double-click installer below instead.
