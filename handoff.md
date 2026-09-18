@@ -1,5 +1,15 @@
 # Kairos — Handoff (connect-to-Claude milestone)
 
+> **⚠️ NEW AGENT: DELETE THIS FILE ONCE ABSORBED.** This is a one-time
+> cross-laptop handoff, not permanent repo documentation. After you've read it
+> and confirmed you can continue the work, remove it and commit the deletion:
+>
+> ```bash
+> git rm handoff.md && git commit -m "Remove one-time cross-laptop handoff note"
+> ```
+>
+> Do this on your first checkout of this branch so it doesn't linger in the repo.
+
 _Written 2026-09-18. Purpose: let a new agent on a different laptop pick up exactly where this session left off — getting Kairos to connect to a local Claude CLI, then merging that backend into the shippable branch._
 
 ---
